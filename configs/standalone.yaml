@@ -1,0 +1,29 @@
+node:
+  id: node-1
+  mode: standalone
+  dataDir: ./data
+
+network:
+  bindAddr: 127.0.0.1
+  port: 6380
+  maxConnections: 1024
+  readTimeoutMs: 30000
+  writeTimeoutMs: 30000
+
+engine:
+  stripeCount: 32
+  memoryLimitBytes: 0          # 0 disables eviction
+  evictionPolicy: lru          # noop | fifo | lru | lfu | random
+
+cluster:
+  enabled: false
+  shardingEnabled: false
+  replicationEnabled: false
+  autoFailover: false
+  writeSafetyMode: async       # async | strong
+  peers: []
+
+observability:
+  apiBindAddr: 127.0.0.1
+  apiPort: 7380
+  logLevel: info
