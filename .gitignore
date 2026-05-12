@@ -1,0 +1,50 @@
+# Planning documents
+planning/
+
+# Go binaries and build output
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Go test and coverage
+*.test
+*.out
+coverage.html
+coverage.txt
+
+# Go module cache (usually global, but just in case)
+vendor/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+.Trash-*
+
+# Temporary files
+tmp/
+temp/
