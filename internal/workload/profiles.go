@@ -69,7 +69,7 @@ func MixedProfile() Profile {
 	return Profile{
 		Name:        "mixed",
 		Description: "Mixed read/write workload across data types",
-		Operations: append(append(StringProfile().Operations, ListProfile().Operations...), ZSetProfile().Operations...),
+		Operations:  append(append(StringProfile().Operations, ListProfile().Operations...), ZSetProfile().Operations...),
 	}
 }
 

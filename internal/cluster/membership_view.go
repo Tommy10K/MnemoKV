@@ -7,5 +7,8 @@ type MemberInfo struct {
 }
 
 func (m *Manager) Membership() []MemberInfo {
-	return nil
+	if m.membership == nil {
+		return nil
+	}
+	return m.membership.Snapshot()
 }

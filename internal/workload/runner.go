@@ -18,11 +18,11 @@ type RunOptions struct {
 }
 
 type Result struct {
-	TotalOps    uint64
-	Errors      uint64
-	Duration    time.Duration
-	Throughput  float64
-	AvgLatency  time.Duration
+	TotalOps   uint64
+	Errors     uint64
+	Duration   time.Duration
+	Throughput float64
+	AvgLatency time.Duration
 }
 
 func Run(ctx context.Context, opts RunOptions) (Result, error) {
