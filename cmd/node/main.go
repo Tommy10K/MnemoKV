@@ -33,6 +33,7 @@ func main() {
 	sink := metrics.NewInMemory(2048)
 	eng := engine.NewWithMetrics(cfg.Engine, sink)
 	clusterMgr := cluster.NewManagerWithNode(cfg.Cluster, cfg.Node.ID)
+	clusterMgr.AttachEngine(eng)
 	srv := server.New(cfg.Network, eng, sink)
 	apiSrv := api.New(cfg.Observability, cfg.Node, cfg.Cluster, eng, sink, clusterMgr)
 
