@@ -31,10 +31,13 @@ func NewWithMetrics(cfg config.EngineConfig, sink metrics.Sink) *Engine {
 	return &Engine{store: store, executor: exec, memory: mem, eviction: evMgr, metrics: sink}
 }
 
-func (e *Engine) Store() *Store              { return e.store }
-func (e *Engine) Memory() *MemoryTracker     { return e.memory }
+func (e *Engine) Store() *Store { return e.store }
+
+func (e *Engine) Memory() *MemoryTracker { return e.memory }
+
 func (e *Engine) Eviction() *eviction.Manager { return e.eviction }
-func (e *Engine) Metrics() metrics.Sink       { return e.metrics }
+
+func (e *Engine) Metrics() metrics.Sink { return e.metrics }
 
 func (e *Engine) Execute(cmd *resp.Command) resp.Frame {
 	if e.memory.HasLimit() && e.memory.ExceedsLimit() {
