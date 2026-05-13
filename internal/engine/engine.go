@@ -1,34 +1,52 @@
 package engine
 
 import (
+	"strings"
+	"time"
+
 	"github.com/mnemokv/mnemokv/internal/config"
+	"github.com/mnemokv/mnemokv/internal/engine/eviction"
+	"github.com/mnemokv/mnemokv/internal/metrics"
 	"github.com/mnemokv/mnemokv/internal/resp"
 )
 
-// Engine bundles the store with its executor. Higher layers (the TCP server)
-// hold an *Engine and call Execute; nothing outside this package should need
-// to know about Store directly.
 type Engine struct {
 	store    *Store
 	executor *Executor
+	memory   *MemoryTracker
+	eviction *eviction.Manager
+	metrics  metrics.Sink
 }
 
-// New builds an Engine from the given configuration. The eviction manager and
-// metrics sink are wired up in later phases; for the baseline we just need a
-// store and an executor on top of it.
 func New(cfg config.EngineConfig) *Engine {
+	return NewWithMetrics(cfg, metrics.NewNoop())
+}
+
+func NewWithMetrics(cfg config.EngineConfig, sink metrics.Sink) *Engine {
 	store := NewStore(cfg.StripeCount)
 	exec := newExecutor(store)
-	return &Engine{store: store, executor: exec}
+	mem := NewMemoryTracker(store, cfg.MemoryLimitBytes)
+	policy := eviction.PolicyByName(cfg.EvictionPolicy)
+	evMgr := eviction.NewManager(store, policy)
+	return &Engine{store: store, executor: exec, memory: mem, eviction: evMgr, metrics: sink}
 }
 
-// Store returns the underlying store. It is exposed so future packages
-// (metrics, eviction, replication) can inspect the dictionary without poking
-// at unexported fields.
-func (e *Engine) Store() *Store { return e.store }
+func (e *Engine) Store() *Store              { return e.store }
+func (e *Engine) Memory() *MemoryTracker     { return e.memory }
+func (e *Engine) Eviction() *eviction.Manager { return e.eviction }
+func (e *Engine) Metrics() metrics.Sink       { return e.metrics }
 
-// Execute is the single entry point used by the server. The returned frame is
-// always non-nil; protocol-level errors come back as resp.Error frames.
 func (e *Engine) Execute(cmd *resp.Command) resp.Frame {
-	return e.executor.Execute(cmd)
+	if e.memory.HasLimit() && e.memory.ExceedsLimit() {
+		overflow := e.memory.Used() - e.memory.Limit()
+		evicted := e.eviction.Run(overflow)
+		if evicted > 0 {
+			e.metrics.IncCounter("eviction.count")
+		}
+	}
+	start := time.Now()
+	frame := e.executor.Execute(cmd)
+	e.metrics.ObserveLatency("cmd."+strings.ToLower(cmd.Name), time.Since(start))
+	e.metrics.IncCounter("cmd.total")
+	return frame
 }

@@ -61,6 +61,28 @@ func (x *Executor) Execute(cmd *resp.Command) resp.Frame {
 		return x.cmdGet(cmd)
 	case "INCR":
 		return x.cmdIncr(cmd)
+
+	// List commands
+	case "LPUSH":
+		return x.cmdLPush(cmd)
+	case "RPUSH":
+		return x.cmdRPush(cmd)
+	case "LPOP":
+		return x.cmdLPop(cmd)
+	case "RPOP":
+		return x.cmdRPop(cmd)
+	case "LLEN":
+		return x.cmdLLen(cmd)
+
+	// Sorted set commands
+	case "ZADD":
+		return x.cmdZAdd(cmd)
+	case "ZRANGE":
+		return x.cmdZRange(cmd)
+	case "ZCARD":
+		return x.cmdZCard(cmd)
+	case "ZSCORE":
+		return x.cmdZScore(cmd)
 	}
 
 	return resp.NewError("ERR", "unknown command '"+cmd.Name+"'")
