@@ -3,6 +3,8 @@ package engine
 import (
 	"hash/fnv"
 	"sync/atomic"
+
+	"github.com/mnemokv/mnemokv/internal/engine/eviction"
 )
 
 // Store is the engine's striped key dictionary. It is concurrency-safe and is
@@ -291,4 +293,32 @@ func nextPowerOfTwo(n int) int {
 		p <<= 1
 	}
 	return p
+}
+
+func (s *Store) Sample(n int) []eviction.Candidate {
+	now := nowNanos()
+	var result []eviction.Candidate
+	for _, st := range s.stripes {
+		if len(result) >= n {
+			break
+		}
+		st.mu.RLock()
+		for _, e := range st.entries {
+			if e.IsExpired(now) {
+				continue
+			}
+			result = append(result, eviction.Candidate{
+				Key:          e.Key,
+				SizeBytes:    e.SizeBytes,
+				CreatedAtNs:  e.CreatedAtNs,
+				LastAccessNs: e.LastAccessNs,
+				AccessCount:  e.AccessCount,
+			})
+			if len(result) >= n {
+				break
+			}
+		}
+		st.mu.RUnlock()
+	}
+	return result
 }
