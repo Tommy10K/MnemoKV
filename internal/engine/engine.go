@@ -11,21 +11,22 @@ import (
 type Engine struct {
 	store    *Store
 	executor *Executor
+	memory   *MemoryTracker
 }
 
-// New builds an Engine from the given configuration. The eviction manager and
-// metrics sink are wired up in later phases; for the baseline we just need a
-// store and an executor on top of it.
+// New builds an Engine from the given configuration.
 func New(cfg config.EngineConfig) *Engine {
 	store := NewStore(cfg.StripeCount)
 	exec := newExecutor(store)
-	return &Engine{store: store, executor: exec}
+	mem := NewMemoryTracker(store, cfg.MemoryLimitBytes)
+	return &Engine{store: store, executor: exec, memory: mem}
 }
 
-// Store returns the underlying store. It is exposed so future packages
-// (metrics, eviction, replication) can inspect the dictionary without poking
-// at unexported fields.
+// Store returns the underlying store.
 func (e *Engine) Store() *Store { return e.store }
+
+// Memory returns the memory tracker.
+func (e *Engine) Memory() *MemoryTracker { return e.memory }
 
 // Execute is the single entry point used by the server. The returned frame is
 // always non-nil; protocol-level errors come back as resp.Error frames.
