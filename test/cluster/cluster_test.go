@@ -10,7 +10,7 @@ import (
 	"github.com/mnemokv/mnemokv/internal/engine"
 )
 
-func newClusterConfig(nodeID string) config.ClusterConfig {
+func newClusterConfig() config.ClusterConfig {
 	return config.ClusterConfig{
 		Enabled:            true,
 		ShardingEnabled:    true,
@@ -26,7 +26,7 @@ func newClusterConfig(nodeID string) config.ClusterConfig {
 }
 
 func TestManagerStartShutdown(t *testing.T) {
-	cfg := newClusterConfig("node-1")
+	cfg := newClusterConfig()
 	m := cluster.NewManagerWithNode(cfg, "node-1")
 	eng := engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noop"})
 	m.AttachEngine(eng)
@@ -44,7 +44,7 @@ func TestManagerStartShutdown(t *testing.T) {
 }
 
 func TestRouterResolvesLocal(t *testing.T) {
-	cfg := newClusterConfig("node-1")
+	cfg := newClusterConfig()
 	m := cluster.NewManagerWithNode(cfg, "node-1")
 	router := m.Router()
 	if router == nil {
@@ -57,7 +57,7 @@ func TestRouterResolvesLocal(t *testing.T) {
 }
 
 func TestControlPlaneSeededOnStart(t *testing.T) {
-	cfg := newClusterConfig("node-1")
+	cfg := newClusterConfig()
 	m := cluster.NewManagerWithNode(cfg, "node-1")
 	cp := m.ControlPlane()
 	if cp == nil {
@@ -73,7 +73,7 @@ func TestControlPlaneSeededOnStart(t *testing.T) {
 }
 
 func TestReplicatorMode(t *testing.T) {
-	cfg := newClusterConfig("node-1")
+	cfg := newClusterConfig()
 	m := cluster.NewManagerWithNode(cfg, "node-1")
 	rep := m.Replicator()
 	if rep == nil {

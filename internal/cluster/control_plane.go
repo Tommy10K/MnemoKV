@@ -105,7 +105,7 @@ func (cp *ControlPlane) BeginElection(ctx context.Context, slot uint16) (string,
 	return winner, nil
 }
 
-func (cp *ControlPlane) electLeader(slot uint16) string {
+func (cp *ControlPlane) electLeader(_ uint16) string {
 	if cp.membership == nil {
 		return cp.localNodeID
 	}

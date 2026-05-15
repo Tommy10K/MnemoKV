@@ -156,7 +156,4 @@ func (s *Server) serveConn(conn net.Conn) {
 }
 
 // canonical RESP error frames returned to clients on framing failures.
-var (
-	frameProtocolError = resp.NewError("ERR", "Protocol error")
-	frameClosingError  = resp.NewError("ERR", "server is shutting down")
-)
+var frameProtocolError = resp.NewError("ERR", "Protocol error")
