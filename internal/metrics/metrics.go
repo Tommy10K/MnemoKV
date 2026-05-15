@@ -22,6 +22,8 @@ type Noop struct{}
 // NewNoop returns a Noop sink.
 func NewNoop() Noop { return Noop{} }
 
-func (Noop) IncCounter(string, ...string)                    {}
+func (Noop) IncCounter(string, ...string) {}
+
 func (Noop) ObserveLatency(string, time.Duration, ...string) {}
-func (Noop) Gauge(string, float64, ...string)                {}
+
+func (Noop) Gauge(string, float64, ...string) {}
