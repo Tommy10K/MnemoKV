@@ -39,10 +39,14 @@ type Array struct {
 }
 
 func (SimpleString) respFrame() {}
-func (Error) respFrame()        {}
-func (Integer) respFrame()      {}
-func (BulkString) respFrame()   {}
-func (Array) respFrame()        {}
+
+func (Error) respFrame() {}
+
+func (Integer) respFrame() {}
+
+func (BulkString) respFrame() {}
+
+func (Array) respFrame() {}
 
 // NewError builds an error frame with the given prefix and message.
 func NewError(prefix, message string) Error {

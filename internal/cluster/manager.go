@@ -1,28 +1,93 @@
-// Package cluster will own routing, replication, membership, and the control
-// plane in later phases. The baseline milestone only needs a placeholder
-// Manager so the binary's wiring stays stable across phases.
+// Package cluster owns routing, replication, membership, and the control
+// plane.
 package cluster
 
 import (
 	"context"
+	"time"
 
 	"github.com/mnemokv/mnemokv/internal/config"
 )
 
-// Manager is the cluster lifecycle handle. In the baseline milestone every
-// method is a no-op because clustering is not active.
 type Manager struct {
-	cfg config.ClusterConfig
+	cfg        config.ClusterConfig
+	nodeID     string
+	ring       *Ring
+	router     *Router
+	proxy      *RESPProxy
+	queue      *ReplicationQueue
+	replicator *Replicator
+	membership *Membership
+	gossip     *Gossip
 }
 
-// NewManager returns a Manager whose Start/Shutdown methods are inert until
-// the cluster phases land.
 func NewManager(cfg config.ClusterConfig) *Manager {
-	return &Manager{cfg: cfg}
+	return NewManagerWithNode(cfg, "")
 }
 
-// Start is a no-op in the baseline.
-func (m *Manager) Start(ctx context.Context) error { return nil }
+func NewManagerWithNode(cfg config.ClusterConfig, nodeID string) *Manager {
+	m := &Manager{cfg: cfg, nodeID: nodeID}
+	if !cfg.Enabled {
+		return m
+	}
 
-// Shutdown is a no-op in the baseline.
-func (m *Manager) Shutdown(ctx context.Context) error { return nil }
+	nodes := make([]Node, 0, len(cfg.Peers))
+	peerAddrs := make(map[string]string, len(cfg.Peers))
+	followers := make([]string, 0, len(cfg.Peers))
+	for _, p := range cfg.Peers {
+		nodes = append(nodes, Node{ID: p.ID, Address: p.Address})
+		if p.ID != nodeID {
+			peerAddrs[p.ID] = p.Address
+			followers = append(followers, p.ID)
+		}
+	}
+	m.ring = NewRing(nodes, defaultVirtualNodes)
+	m.router = NewRouter(nodeID, m.ring)
+	m.proxy = NewRESPProxy(peerAddrs, 2*time.Second)
+	m.membership = NewMembership(nodeID, nodes, 3*time.Second, 10*time.Second)
+	m.gossip = NewGossip(m.membership, m.proxy, time.Second)
+
+	if cfg.ReplicationEnabled {
+		m.queue = NewReplicationQueue()
+		m.replicator = NewReplicator(cfg.WriteSafetyMode, nodeID, followers, m.proxy, m.queue)
+	}
+	return m
+}
+
+func (m *Manager) Router() *Router { return m.router }
+
+func (m *Manager) Ring() *Ring { return m.ring }
+
+func (m *Manager) Replicator() *Replicator { return m.replicator }
+
+func (m *Manager) MembershipTable() *Membership { return m.membership }
+
+func (m *Manager) Proxy() Transport {
+	if m.proxy == nil {
+		return nil
+	}
+	return m.proxy
+}
+
+func (m *Manager) Start(ctx context.Context) error {
+	if m.replicator != nil {
+		m.replicator.Start(ctx)
+	}
+	if m.gossip != nil {
+		m.gossip.Start(ctx)
+	}
+	return nil
+}
+
+func (m *Manager) Shutdown(ctx context.Context) error {
+	if m.gossip != nil {
+		m.gossip.Shutdown()
+	}
+	if m.replicator != nil {
+		m.replicator.Shutdown()
+	}
+	if m.proxy != nil {
+		return m.proxy.Close()
+	}
+	return nil
+}

@@ -6,12 +6,12 @@ import (
 )
 
 type InMemory struct {
-	mu         sync.Mutex
-	counters   map[string]uint64
-	gauges     map[string]float64
-	latencies  map[string][]time.Duration
-	events     []Event
-	maxEvents  int
+	mu        sync.Mutex
+	counters  map[string]uint64
+	gauges    map[string]float64
+	latencies map[string][]time.Duration
+	events    []Event
+	maxEvents int
 }
 
 func NewInMemory(maxEvents int) *InMemory {
