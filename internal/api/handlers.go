@@ -33,9 +33,10 @@ func (s *Server) handleMetricsSummary(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleClusterState(w http.ResponseWriter, r *http.Request) {
 	resp := ClusterStateResponse{
-		Enabled:   s.cluster.Enabled,
-		NodeID:    s.node.ID,
-		WriteMode: s.cluster.WriteSafetyMode,
+		Enabled:      s.cluster.Enabled,
+		NodeID:       s.node.ID,
+		WriteMode:    s.cluster.WriteSafetyMode,
+		AutoFailover: s.cluster.AutoFailover,
 	}
 	for _, p := range s.cluster.Peers {
 		resp.Peers = append(resp.Peers, p.ID)
@@ -47,6 +48,9 @@ func (s *Server) handleClusterState(w http.ResponseWriter, r *http.Request) {
 				Address: m.Address,
 				State:   m.State,
 			})
+		}
+		if cp := s.cluMgr.ControlPlane(); cp != nil {
+			resp.Term = cp.CurrentTerm()
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)

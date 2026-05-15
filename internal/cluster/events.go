@@ -8,4 +8,7 @@ const (
 	EventReplicaError = "cluster.replica.error"
 	EventMemberUp     = "cluster.member.up"
 	EventMemberDown   = "cluster.member.down"
+	EventLeaderChange = "cluster.leader.change"
+	EventTermAdvance  = "cluster.term.advance"
+	EventElectionStart = "cluster.election.start"
 )
