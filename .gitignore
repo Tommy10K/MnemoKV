@@ -9,6 +9,7 @@ planning/
 *.dylib
 bin/
 dist/
+results/
 
 # Go test and coverage
 *.test

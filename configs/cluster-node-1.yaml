@@ -18,8 +18,8 @@ engine:
 cluster:
   enabled: true
   shardingEnabled: true
-  replicationEnabled: false
-  autoFailover: false
+  replicationEnabled: true
+  autoFailover: true
   writeSafetyMode: async
   peers:
     - id: node-1
