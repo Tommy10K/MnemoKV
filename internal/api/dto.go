@@ -18,11 +18,13 @@ type MetricsSummary struct {
 }
 
 type ClusterStateResponse struct {
-	Enabled    bool         `json:"enabled"`
-	NodeID     string       `json:"nodeId"`
-	WriteMode  string       `json:"writeMode"`
-	Peers      []string     `json:"peers"`
-	Membership []PeerStatus `json:"membership,omitempty"`
+	Enabled      bool         `json:"enabled"`
+	NodeID       string       `json:"nodeId"`
+	WriteMode    string       `json:"writeMode"`
+	AutoFailover bool         `json:"autoFailover"`
+	Term         uint64       `json:"term,omitempty"`
+	Peers        []string     `json:"peers"`
+	Membership   []PeerStatus `json:"membership,omitempty"`
 }
 
 type PeerStatus struct {

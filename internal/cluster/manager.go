@@ -10,15 +10,17 @@ import (
 )
 
 type Manager struct {
-	cfg        config.ClusterConfig
-	nodeID     string
-	ring       *Ring
-	router     *Router
-	proxy      *RESPProxy
-	queue      *ReplicationQueue
-	replicator *Replicator
-	membership *Membership
-	gossip     *Gossip
+	cfg          config.ClusterConfig
+	nodeID       string
+	ring         *Ring
+	router       *Router
+	proxy        *RESPProxy
+	queue        *ReplicationQueue
+	replicator   *Replicator
+	membership   *Membership
+	gossip       *Gossip
+	controlPlane *ControlPlane
+	election     *Election
 }
 
 func NewManager(cfg config.ClusterConfig) *Manager {
@@ -47,6 +49,17 @@ func NewManagerWithNode(cfg config.ClusterConfig, nodeID string) *Manager {
 	m.membership = NewMembership(nodeID, nodes, 3*time.Second, 10*time.Second)
 	m.gossip = NewGossip(m.membership, m.proxy, time.Second)
 
+	if cfg.AutoFailover {
+		m.controlPlane = NewControlPlane(ControlPlaneConfig{
+			LocalNodeID: nodeID,
+			Membership:  m.membership,
+			Transport:   m.proxy,
+			Ring:        m.ring,
+		})
+		m.controlPlane.SeedSlots(nodeID)
+		m.election = NewElection(m.controlPlane, m.membership, nodeID, 2*time.Second)
+	}
+
 	if cfg.ReplicationEnabled {
 		m.queue = NewReplicationQueue()
 		m.replicator = NewReplicator(cfg.WriteSafetyMode, nodeID, followers, m.proxy, m.queue)
@@ -62,6 +75,8 @@ func (m *Manager) Replicator() *Replicator { return m.replicator }
 
 func (m *Manager) MembershipTable() *Membership { return m.membership }
 
+func (m *Manager) ControlPlane() *ControlPlane { return m.controlPlane }
+
 func (m *Manager) Proxy() Transport {
 	if m.proxy == nil {
 		return nil
@@ -76,10 +91,16 @@ func (m *Manager) Start(ctx context.Context) error {
 	if m.gossip != nil {
 		m.gossip.Start(ctx)
 	}
+	if m.election != nil {
+		m.election.Start(ctx)
+	}
 	return nil
 }
 
 func (m *Manager) Shutdown(ctx context.Context) error {
+	if m.election != nil {
+		m.election.Shutdown()
+	}
 	if m.gossip != nil {
 		m.gossip.Shutdown()
 	}
