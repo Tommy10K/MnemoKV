@@ -6,7 +6,7 @@ import { HomePage } from "@/pages/home/HomePage"
 import { LearnLanding } from "@/pages/learn/LearnLanding"
 import { ChapterPage } from "@/pages/learn/ChapterPage"
 import { chapters } from "@/pages/learn/chapters"
-import { UseLanding } from "@/pages/use/UseLanding"
+import { ConfigPage } from "@/pages/use/ConfigPage"
 
 export function AppRoutes() {
   return (
@@ -26,7 +26,7 @@ export function AppRoutes() {
         </Route>
 
         <Route path="use" element={<UseLayout />}>
-          <Route index element={<UseLanding />} />
+          <Route index element={<ConfigPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />
