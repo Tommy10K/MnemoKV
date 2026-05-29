@@ -9,4 +9,5 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/cluster/state", s.handleClusterState)
 	mux.HandleFunc("/events", s.handleEvents)
 	mux.HandleFunc("/commands", s.handleCommands)
+	mux.HandleFunc("/engine/eviction-policy", s.handleEvictionPolicy)
 }

@@ -111,3 +111,41 @@ func TestCommands(t *testing.T) {
 		t.Fatalf("NOPE: %+v", got)
 	}
 }
+
+func TestEvictionPolicy(t *testing.T) {
+	s := newTestServer()
+
+	switchTo := func(name string) evictionPolicyResponse {
+		body, _ := json.Marshal(evictionPolicyRequest{Policy: name})
+		req := httptest.NewRequest(http.MethodPost, "/engine/eviction-policy", bytes.NewReader(body))
+		rr := httptest.NewRecorder()
+		s.handleEvictionPolicy(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status %d body %s", rr.Code, rr.Body.String())
+		}
+		var out evictionPolicyResponse
+		if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+
+	if got := switchTo("fifo"); got.Policy != "fifo" {
+		t.Fatalf("switch to fifo: %+v", got)
+	}
+	if got := s.engine.Eviction().Policy().Name(); got != "fifo" {
+		t.Fatalf("engine policy after switch: %s", got)
+	}
+	if got := switchTo("LRU"); got.Policy != "lru" {
+		t.Fatalf("case insensitive switch: %+v", got)
+	}
+
+	// unknown policy must be rejected
+	body, _ := json.Marshal(evictionPolicyRequest{Policy: "bogus"})
+	req := httptest.NewRequest(http.MethodPost, "/engine/eviction-policy", bytes.NewReader(body))
+	rr := httptest.NewRecorder()
+	s.handleEvictionPolicy(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unknown policy, got %d", rr.Code)
+	}
+}

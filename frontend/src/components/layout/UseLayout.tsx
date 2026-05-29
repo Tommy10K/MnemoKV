@@ -6,6 +6,7 @@ const tabs = [
   { to: "/use/console", label: "Console" },
   { to: "/use/workloads", label: "Workloads" },
   { to: "/use/cluster", label: "Cluster" },
+  { to: "/use/eviction", label: "Eviction Lab" },
   { to: "/use/benchmarks", label: "Benchmarks" },
 ]
 

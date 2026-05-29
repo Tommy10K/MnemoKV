@@ -47,3 +47,16 @@ export async function runCommand(args: string[]): Promise<CommandResult> {
   }
   return (await res.json()) as CommandResult
 }
+
+export async function setEvictionPolicy(policy: string): Promise<{ policy: string }> {
+  const res = await fetch(base() + "/engine/eviction-policy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ policy }),
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(body || `eviction-policy returned ${res.status}`)
+  }
+  return (await res.json()) as { policy: string }
+}
