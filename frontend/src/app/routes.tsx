@@ -7,6 +7,7 @@ import { LearnLanding } from "@/pages/learn/LearnLanding"
 import { ChapterPage } from "@/pages/learn/ChapterPage"
 import { chapters } from "@/pages/learn/chapters"
 import { ConfigPage } from "@/pages/use/ConfigPage"
+import { DashboardPage } from "@/pages/use/DashboardPage"
 
 export function AppRoutes() {
   return (
@@ -27,6 +28,7 @@ export function AppRoutes() {
 
         <Route path="use" element={<UseLayout />}>
           <Route index element={<ConfigPage />} />
+          <Route path="dashboard" element={<DashboardPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

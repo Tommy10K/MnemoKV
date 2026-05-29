@@ -2,7 +2,7 @@ import { NavLink, Outlet } from "react-router-dom"
 
 const tabs = [
   { to: "/use", label: "Configure", end: true },
-  { to: "/use/dashboard", label: "Dashboard", disabled: true },
+  { to: "/use/dashboard", label: "Dashboard" },
   { to: "/use/workloads", label: "Workloads", disabled: true },
   { to: "/use/cluster", label: "Cluster", disabled: true },
   { to: "/use/benchmarks", label: "Benchmarks", disabled: true },
