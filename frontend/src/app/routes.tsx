@@ -10,6 +10,7 @@ import { ConfigPage } from "@/pages/use/ConfigPage"
 import { DashboardPage } from "@/pages/use/DashboardPage"
 import { CommandConsolePage } from "@/pages/use/CommandConsolePage"
 import { WorkloadsPage } from "@/pages/use/WorkloadsPage"
+import { ClusterPage } from "@/pages/use/ClusterPage"
 
 export function AppRoutes() {
   return (
@@ -33,6 +34,7 @@ export function AppRoutes() {
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="console" element={<CommandConsolePage />} />
           <Route path="workloads" element={<WorkloadsPage />} />
+          <Route path="cluster" element={<ClusterPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

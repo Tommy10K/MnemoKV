@@ -5,7 +5,7 @@ const tabs = [
   { to: "/use/dashboard", label: "Dashboard" },
   { to: "/use/console", label: "Console" },
   { to: "/use/workloads", label: "Workloads" },
-  { to: "/use/cluster", label: "Cluster", disabled: true },
+  { to: "/use/cluster", label: "Cluster" },
   { to: "/use/benchmarks", label: "Benchmarks", disabled: true },
 ]
 
