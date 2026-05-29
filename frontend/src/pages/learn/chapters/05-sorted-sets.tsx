@@ -1,3 +1,4 @@
+import { SkipListVisual } from "@/components/visuals/SkipListVisual"
 import { Callout, Code, H2, P, Pre, UL } from "../components"
 
 export function Chapter05() {
@@ -20,6 +21,8 @@ export function Chapter05() {
 L2:  head ─────────→ 5 ─────────→ 12 ──→ NIL
 L1:  head ──→ 2 ──→ 5 ──→ 9 ──→ 12 ──→ NIL
 L0:  head → 2 → 5 → 7 → 9 → 11 → 12 → 15 → NIL`}</Pre>
+
+      <SkipListVisual />
 
       <H2>Why two structures</H2>
       <UL>

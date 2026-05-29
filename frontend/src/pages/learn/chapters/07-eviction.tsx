@@ -1,3 +1,4 @@
+import { EvictionVisual } from "@/components/visuals/EvictionVisual"
 import { Callout, H2, P, UL } from "../components"
 
 export function Chapter07() {
@@ -37,6 +38,8 @@ export function Chapter07() {
           count. Great for stable hot keys, bad when popularity shifts.
         </li>
       </UL>
+
+      <EvictionVisual />
 
       <H2>Why sampling</H2>
       <P>

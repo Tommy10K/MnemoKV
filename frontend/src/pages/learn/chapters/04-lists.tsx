@@ -1,3 +1,4 @@
+import { LinkedListVisual } from "@/components/visuals/LinkedListVisual"
 import { Callout, Code, H2, P, Pre, UL } from "../components"
 
 export function Chapter04() {
@@ -8,6 +9,8 @@ export function Chapter04() {
         previous and next neighbors. The list value itself holds pointers to the head and tail,
         and a length counter. That layout is what makes push and pop from either end O(1).
       </P>
+
+      <LinkedListVisual />
 
       <H2>Why doubly linked, not an array?</H2>
       <UL>

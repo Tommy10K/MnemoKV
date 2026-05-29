@@ -1,3 +1,4 @@
+import { StripingVisual } from "@/components/visuals/StripingVisual"
 import { Callout, H2, P, Pre, UL } from "../components"
 
 export function Chapter06() {
@@ -9,6 +10,8 @@ export function Chapter06() {
         process. Lock striping fixes this by splitting the store into N independent shards, each
         with its own lock.
       </P>
+
+      <StripingVisual />
 
       <H2>How striping works</H2>
       <Pre>{`hash(key) % N  →  stripe index
