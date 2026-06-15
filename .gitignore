@@ -1,6 +1,8 @@
 # Planning documents
 planning/
 
+.agents/skills/
+
 # Go binaries and build output
 *.exe
 *.exe~
