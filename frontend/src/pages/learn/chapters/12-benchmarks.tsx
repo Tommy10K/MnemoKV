@@ -25,32 +25,31 @@ export function Chapter12() {
         </li>
       </UL>
 
-      <H2>A sample line</H2>
+      <H2>An example line</H2>
       <Pre>{`BenchmarkSET-16    3000000    412 ns/op    48 B/op    1 allocs/op`}</Pre>
       <P>
-        Three million iterations, ~412 nanoseconds each, allocating 48 bytes and one heap object
-        per call. That is fast enough that you cannot meaningfully measure a single call — only
-        millions of them in aggregate.
+        This illustrative line reports three million iterations at roughly 412 nanoseconds each,
+        with 48 bytes and one heap allocation per call. It is not a current MnemoKV result.
       </P>
 
       <H2>How to measure honestly</H2>
       <UL>
         <li>Run the benchmark multiple times (<Code>-count=3</Code>) and compare.</li>
-        <li>Warm up the CPU before reading numbers; the first run is always slower.</li>
+        <li>Warm up the CPU before reading numbers; early runs are often noisier or slower.</li>
         <li>Compare like with like — same key sizes, same machine, same Go version.</li>
         <li>Beware of the compiler optimizing your work away if you do not consume the result.</li>
       </UL>
 
       <H2>What you'll see in MnemoKV</H2>
       <UL>
-        <li>Strings are the cheapest, as expected — a hash lookup and a byte copy.</li>
-        <li>Lists are slightly more expensive because they allocate a node per push.</li>
-        <li>Sorted sets are the most expensive — the skip list does real work on every insert.</li>
+        <li>Strings are expected to be a cheap baseline, but copies and metadata updates still matter.</li>
+        <li>List pushes allocate linked nodes and may show more allocation pressure.</li>
+        <li>Sorted-set writes maintain both an index and ordering structure.</li>
         <li>Eviction overhead is invisible until memory is actually full.</li>
       </UL>
 
       <Callout>
-        The benchmark page in the Use section will let you upload the JSON produced by
+        The benchmark page in the Use section can import output produced by
         <Code>scripts/benchmark.sh</Code> and compare these numbers visually instead of squinting
         at raw output.
       </Callout>

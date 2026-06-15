@@ -4,46 +4,39 @@ export function Chapter09() {
   return (
     <>
       <P>
-        Replication is how a cluster keeps more than one copy of every key. When the leader for a
-        slot accepts a write, that write must reach the followers — otherwise a leader crash
-        loses data. MnemoKV supports two replication modes that make different trade-offs
-        between latency and durability.
+        Replication keeps additional copies of writes on other nodes. A complete replicated
+        system must define ownership, ordering, acknowledgements, duplicate handling, and what a
+        successful client reply guarantees during failures.
       </P>
 
-      <H2>Async mode</H2>
+      <H2>MnemoKV asynchronous fan-out</H2>
       <UL>
-        <li>The leader applies the write locally and returns success immediately.</li>
-        <li>The write is queued for delivery to followers in the background.</li>
-        <li>Latency is the same as a single-node write.</li>
-        <li>If the leader dies before the queue drains, those writes are lost.</li>
+        <li>A local write is applied before replication is queued.</li>
+        <li>One shared queue sends writes to configured peers sequentially.</li>
+        <li>A slow peer can delay delivery to peers behind it.</li>
+        <li>A process failure can lose queued writes.</li>
       </UL>
 
-      <H2>Strong mode</H2>
+      <H2>MnemoKV synchronous fan-out</H2>
       <UL>
-        <li>The leader waits until a configured number of followers acknowledge.</li>
-        <li>The client sees higher latency — every write costs at least one extra round trip.</li>
-        <li>Acknowledged writes are durable across leader crashes.</li>
+        <li>The node sends the command to every configured peer before local execution.</li>
+        <li>This adds network latency and can fail when a peer is unavailable.</li>
+        <li>It is not a quorum, consensus, rollback, or durable commit protocol.</li>
+        <li>An acknowledgement must not be interpreted as a linearizable or disk-durable write.</li>
       </UL>
 
-      <H2>How followers apply writes</H2>
+      <H2>Replication records</H2>
       <P>
-        Each replicated write is encoded as a <Code>REPLICATE</Code> command containing the
-        original command's arguments. The follower's engine executes it exactly like a local
-        write, except a flag suppresses re-replication. The replication queue is per-target so a
-        slow follower cannot block a fast one.
+        Internal records contain source, slot, term, sequence, and timestamp metadata, but the
+        current <Code>REPLICATE</Code> wire command does not transmit or validate all of it. The
+        follower applies the inner command without rejecting stale, duplicate, or out-of-order
+        records.
       </P>
-
-      <H2>What replication does <em>not</em> give you</H2>
-      <UL>
-        <li>Cross-cluster consistency. Each slot has one leader; replication is leader-to-follower.</li>
-        <li>Conflict resolution. There are no concurrent writers competing for the same key.</li>
-        <li>Disk durability. Both modes keep data in memory; the trade-off is purely about how many copies exist.</li>
-      </UL>
 
       <Callout>
-        Replication is what makes failover safe. When a leader dies, the cluster promotes a
-        follower that has the most recent state. The next chapter covers how gossip notices the
-        leader is gone in the first place.
+        Use replication as a prototype demonstration of command fan-out between in-memory
+        processes. It is not yet a safe foundation for automatic failover or acknowledged-write
+        durability.
       </Callout>
     </>
   )

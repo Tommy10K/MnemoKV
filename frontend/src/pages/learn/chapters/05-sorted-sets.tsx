@@ -30,12 +30,12 @@ L0:  head → 2 → 5 → 7 → 9 → 11 → 12 → 15 → NIL`}</Pre>
           The hash map answers <Code>ZSCORE member</Code> in O(1).
         </li>
         <li>
-          The skip list answers <Code>ZRANGE start stop</Code> in O(log n) plus the number of
-          returned members.
+          The current skip list answers <Code>ZRANGE start stop</Code> in O(n + m), because it
+          walks from the head to the requested rank before returning m members.
         </li>
         <li>
-          A single <Code>ZADD</Code> updates both, but each update is local to one shard of the
-          structure.
+          A single <Code>ZADD</Code> updates both structures while the key is protected by its
+          store stripe and sorted-set synchronization.
         </li>
       </UL>
 
@@ -47,12 +47,15 @@ L0:  head → 2 → 5 → 7 → 9 → 11 → 12 → 15 → NIL`}</Pre>
         <li>
           <Code>ZRANGE key start stop</Code> — return members in score order
         </li>
+        <li>
+          <Code>ZCARD key</Code> / <Code>ZSCORE key member</Code> — inspect size or one score
+        </li>
       </UL>
 
       <Callout>
         Sorted sets are the algorithmically interesting type. When the benchmarks show zsets
-        running slower than strings, that gap is exactly the O(log n) cost of maintaining order
-        — the price you pay for being able to ask "give me the top 10".
+        running slower than strings, maintaining order is one likely contributor. Benchmark
+        results also include locking, allocation, key distribution, and range-walk costs.
       </Callout>
     </>
   )

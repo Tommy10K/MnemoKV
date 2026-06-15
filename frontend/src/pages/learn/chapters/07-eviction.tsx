@@ -15,19 +15,19 @@ export function Chapter07() {
       <UL>
         <li>Every write reserves bytes against a counter.</li>
         <li>Every delete releases them.</li>
-        <li>When the counter exceeds the configured limit, the eviction manager runs.</li>
+        <li>The current engine checks the limit before each command and evicts only when it is already over.</li>
         <li>The accounting is approximate — it tracks the dominant cost of each value, not every byte of overhead.</li>
       </UL>
 
-      <H2>The four policies</H2>
+      <H2>The selectable policies</H2>
       <UL>
         <li>
           <strong>FIFO.</strong> Evict the oldest insertion. Cheap, predictable, but ignores
           access patterns entirely.
         </li>
         <li>
-          <strong>Random.</strong> Pick a random sample and drop the worst. Surprisingly
-          competitive when access is uniform.
+          <strong>Random.</strong> Take candidates from a random store sample without scoring a
+          "worst" item.
         </li>
         <li>
           <strong>LRU (Least Recently Used).</strong> Evict the key not touched for the longest
@@ -37,6 +37,10 @@ export function Chapter07() {
           <strong>LFU (Least Frequently Used).</strong> Evict the key with the lowest access
           count. Great for stable hot keys, bad when popularity shifts.
         </li>
+        <li>
+          <strong>Noop.</strong> Never chooses a victim. It is useful for unlimited-memory tests,
+          but the current backend can remain above a configured limit when it is selected.
+        </li>
       </UL>
 
       <EvictionVisual />
@@ -44,15 +48,15 @@ export function Chapter07() {
       <H2>Why sampling</H2>
       <P>
         Maintaining a perfectly accurate LRU or LFU list across millions of keys is expensive.
-        MnemoKV uses approximate policies: it samples a small handful of candidates per eviction
-        cycle and picks the worst from the sample. Real Redis does the same. The accuracy you
-        lose is negligible compared to the work you save.
+        MnemoKV's FIFO, LRU, and LFU policies score a small sample of candidates rather than
+        maintaining a perfect global order. Random uses candidates from the sample directly.
+        Sampling reduces bookkeeping cost at the expense of approximate choices.
       </P>
 
       <Callout>
-        The eviction policy is the one engine setting that can be switched at runtime today. The
-        Use section's Eviction Lab (later phase) lets you flip between policies on a live node
-        and watch how memory and throughput respond.
+        The Eviction Lab can switch policy on a live node. A write may push usage over the limit,
+        and a later command can trigger eviction before it runs. This timing should be treated as
+        current behavior, not the final memory-limit design.
       </Callout>
     </>
   )

@@ -4,8 +4,9 @@ export function Chapter02() {
   return (
     <>
       <P>
-        RESP (REdis Serialization Protocol) is a tiny line-oriented binary format. Commands are
-        encoded as arrays of bulk strings. Replies use a small set of frame types. The whole
+        RESP (REdis Serialization Protocol) is a binary-safe serialization protocol built from
+        CRLF-delimited type markers and length-prefixed bulk strings. Commands are encoded as
+        arrays of bulk strings. Replies use a small set of frame types. The whole
         protocol fits on a postcard, which is one reason Redis-compatible servers like MnemoKV
         can interoperate with any RESP client, including <Code>redis-cli</Code>.
       </P>

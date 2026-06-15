@@ -7,7 +7,11 @@ import { useNodeStatus } from "@/hooks/useNodeStatus"
 import { useAppStore } from "@/store/appStore"
 
 const policies = [
-  { id: "noop", label: "noop", note: "Never evicts. The store will reject writes once full." },
+  {
+    id: "noop",
+    label: "noop",
+    note: "Never evicts. The current backend can continue above a configured limit.",
+  },
   { id: "fifo", label: "FIFO", note: "Oldest insert wins the boot. Predictable and cheap." },
   { id: "lru", label: "LRU", note: "Least recently used. Strong for temporal locality." },
   { id: "lfu", label: "LFU", note: "Least frequently used. Strong for stable hot keys." },
@@ -85,8 +89,8 @@ export function EvictionLabPage() {
 
       {offline ? (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
-          Node at <span className="font-mono">{baseUrl}</span> is unreachable. Start a node and
-          configure the API base URL in Configure.
+          Node at <span className="font-mono">{baseUrl}</span> is unreachable. Start a node or
+          change the API target above.
         </div>
       ) : (
         <>
@@ -183,11 +187,18 @@ export function EvictionLabPage() {
           </section>
 
           <section className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4 text-xs text-[#9ca3af]">
-            <p>
-              To see eviction kick in, generate load with the Workloads tab while a low memory
-              limit is configured. The {`"`}evicted so far{`"`} counter will start climbing as
-              soon as the store fills up.
-            </p>
+            {memoryLimit > 0 ? (
+              <p>
+                Generate load with the Workloads tab to exercise the configured{" "}
+                {formatBytes(memoryLimit)} limit. Eviction currently runs before a later command
+                when usage is already over the limit, so the graph may briefly remain above it.
+              </p>
+            ) : (
+              <p className="text-amber-300">
+                Eviction cannot occur because this node has no memory limit. Generate a config
+                with a small positive limit, restart the node with -config, then return here.
+              </p>
+            )}
           </section>
         </>
       )}

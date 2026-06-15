@@ -15,7 +15,8 @@ export function Chapter03() {
       <P>
         The entry carries metadata (type, expiration, last-access timestamp) alongside the value.
         That metadata is what makes <Code>EXPIRE</Code>, <Code>TTL</Code>, and the various
-        eviction policies possible without changing the hot path of <Code>GET</Code>.
+        eviction policies possible. Reads update access metadata while holding the key's stripe
+        lock, so that metadata has a real hot-path cost.
       </P>
 
       <H2>The commands implemented</H2>
@@ -49,8 +50,8 @@ export function Chapter03() {
       </P>
 
       <Callout>
-        Strings are the baseline. When the benchmarks compare command families, strings are the
-        fastest because every operation is a single hash lookup plus a byte copy.
+        Strings are the baseline. They are expected to be cheaper than the ordered or linked data
+        structures, but the actual difference should be measured for the current workload.
       </Callout>
     </>
   )

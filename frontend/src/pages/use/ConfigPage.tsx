@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 import {
   configToYaml,
   defaultClusterPeers,
@@ -11,11 +12,13 @@ import {
   type WriteSafety,
 } from "@/lib/config"
 import { downloadFile } from "@/lib/download"
+import { useAppStore } from "@/store/appStore"
 
 const evictionPolicies: EvictionPolicy[] = ["noop", "fifo", "lru", "lfu", "random"]
 const writeModes: WriteSafety[] = ["async", "strong"]
 
 export function ConfigPage() {
+  const setApiBaseUrl = useAppStore((state) => state.setApiBaseUrl)
   const [config, setConfig] = useState<NodeConfig>(defaultStandalone)
   const errors = useMemo(() => validate(config), [config])
   const yaml = useMemo(() => configToYaml(config), [config])
@@ -31,7 +34,7 @@ export function ConfigPage() {
         mode,
         shardingEnabled: true,
         replicationEnabled: true,
-        autoFailover: true,
+        autoFailover: false,
         peers: defaultClusterPeers(3),
       }))
       return
@@ -129,6 +132,11 @@ export function ConfigPage() {
 
         {config.mode === "clustered" && (
           <Section title="Cluster">
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+              Cluster mode is an experimental prototype. Live commands are not routed by key
+              ownership, replication is fan-out rather than consensus, and automatic failover
+              does not provide a one-leader safety guarantee.
+            </div>
             <Field label="Sharding enabled">
               <Toggle
                 checked={config.shardingEnabled}
@@ -154,6 +162,10 @@ export function ConfigPage() {
                 onChange={(v) => update("writeSafetyMode", v as WriteSafety)}
               />
             </Field>
+            <p className="text-xs text-[#9ca3af]">
+              The backend setting named <span className="font-mono">strong</span> currently means
+              synchronous fan-out to configured peers. It is not a quorum or durable commit mode.
+            </p>
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
@@ -235,14 +247,26 @@ export function ConfigPage() {
         )}
 
         <p className="text-xs text-[#6b7280]">
-          Save the file, then run:{" "}
+          This page only generates a file; it cannot reconfigure a running node. Save it, then run:{" "}
           <code className="mono rounded bg-[#161b22] px-1.5 py-0.5">
             ./bin/mnemokv-node -config {config.id}.yaml
           </code>
         </p>
+        <Link
+          to="/use/dashboard"
+          onClick={() => setApiBaseUrl(apiUrlFor(config.apiBindAddr, config.apiPort))}
+          className="rounded-md border border-emerald-500/40 px-3 py-2 text-center text-xs text-emerald-300 hover:bg-emerald-500/10"
+        >
+          Open dashboard for {apiUrlFor(config.apiBindAddr, config.apiPort)}
+        </Link>
       </aside>
     </div>
   )
+}
+
+function apiUrlFor(bindAddr: string, port: number): string {
+  const host = bindAddr === "0.0.0.0" ? "127.0.0.1" : bindAddr === "::" ? "[::1]" : bindAddr
+  return `http://${host}:${port}`
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

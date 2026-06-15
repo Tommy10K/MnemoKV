@@ -32,6 +32,9 @@ After:  HEAD → A ↔ B ↔ C ↔ D ← TAIL`}</Pre>
         <li>
           <Code>LPOP key</Code> / <Code>RPOP key</Code> — remove and return from either end
         </li>
+        <li>
+          <Code>LLEN key</Code> — return the current length
+        </li>
       </UL>
 
       <H2>Use them as</H2>
@@ -43,14 +46,12 @@ After:  HEAD → A ↔ B ↔ C ↔ D ← TAIL`}</Pre>
         <li>
           <strong>Stacks:</strong> <Code>LPUSH</Code> and <Code>LPOP</Code> on the same end
         </li>
-        <li>
-          <strong>Sliding logs:</strong> keep the most recent N events
-        </li>
       </UL>
 
       <Callout>
-        Lists carry their own lock. A push or pop only blocks other operations on the same list,
-        not other keys. That matters when many producers are writing to the same queue at once.
+        A list operation first contends on the key's store stripe and may then use the list's own
+        lock. Different keys in the same stripe can therefore block one another. MnemoKV also has
+        no trim command, so a bounded sliding-log pattern is not complete yet.
       </Callout>
     </>
   )

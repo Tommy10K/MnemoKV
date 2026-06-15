@@ -19,9 +19,9 @@ stripe.lock()
 stripe.map[key] = value
 stripe.unlock()`}</Pre>
       <P>
-        Two clients writing to different keys almost always land on different stripes and can
-        proceed in parallel. Two clients writing the same key still serialize — that's correct.
-        The contention only happens at the granularity of stripes, not the whole store.
+        Two clients writing to different keys can land on different stripes and proceed in
+        parallel. Different keys can also collide on one stripe and serialize. Two clients
+        writing the same key always serialize — that is required for correctness.
       </P>
 
       <H2>Choosing N</H2>
@@ -40,8 +40,9 @@ stripe.unlock()`}</Pre>
 
       <Callout>
         MnemoKV configures the stripe count at startup. The default works for most workloads.
-        When you watch the dashboard under load, the throughput you see is bounded by how many
-        stripes can be busy at once.
+        Lists and sorted sets can also take a value-level lock after the stripe lock. Dashboard
+        throughput reflects the full command path, so measure it rather than attributing a result
+        to stripe count alone.
       </Callout>
     </>
   )

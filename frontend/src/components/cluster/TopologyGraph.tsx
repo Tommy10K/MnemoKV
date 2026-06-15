@@ -18,6 +18,7 @@ const stateStyle: Record<string, { bg: string; border: string }> = {
   recovering: { bg: "#1f3a5f", border: "#60a5fa" },
   suspect: { bg: "#3f2d09", border: "#f59e0b" },
   unavailable: { bg: "#3f1d1d", border: "#ef4444" },
+  unknown: { bg: "#1f2937", border: "#6b7280" },
 }
 
 export function TopologyGraph({ peers, selfId }: Props) {
@@ -85,7 +86,11 @@ function buildGraph(peers: PeerStatus[], selfId: string): { nodes: Node[]; edges
     for (let j = i + 1; j < peers.length; j++) {
       const a = peers[i]
       const b = peers[j]
-      const stale = a.state === "unavailable" || b.state === "unavailable"
+      const stale =
+        a.state === "unavailable" ||
+        b.state === "unavailable" ||
+        a.state === "unknown" ||
+        b.state === "unknown"
       edges.push({
         id: `${a.id}-${b.id}`,
         source: a.id,

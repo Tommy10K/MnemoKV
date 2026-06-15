@@ -4,47 +4,32 @@ export function Chapter11() {
   return (
     <>
       <P>
-        Failover is the act of replacing a dead leader with a live follower so writes can
-        continue. It sounds simple until you realize the dead leader might not actually be dead —
-        it might be slow, partitioned, or about to recover. Doing failover safely requires a
-        mechanism that prevents two nodes from acting as leader at the same time.
+        Safe failover replaces an unavailable leader while preventing two nodes from accepting
+        conflicting writes. That normally requires agreed terms, deterministic elections,
+        fencing before mutation, replica-freshness checks, and a recovery protocol.
       </P>
 
-      <H2>The term</H2>
-      <P>
-        Every leadership change increments a monotonic <em>term</em> number. Every write the
-        engine accepts is tagged with the term that was current at the time. A follower will
-        reject any write tagged with a term older than the one it has seen. This is called
-        stale-leader fencing: an old leader can still try to write, but no follower will accept
-        the work, so the data never propagates.
-      </P>
-
-      <H2>The election flow</H2>
+      <H2>Pieces present in MnemoKV</H2>
       <UL>
-        <li>The election monitor watches the membership table for unavailable leaders.</li>
-        <li>When one is detected, it picks a candidate follower for each affected slot.</li>
-        <li>The control plane advances the term and broadcasts the new leader.</li>
-        <li>Other nodes update their leader table; subsequent commands for that slot route to the new leader.</li>
+        <li>The control plane tracks terms and slot leaders in memory.</li>
+        <li>An election monitor reacts to locally unavailable members.</li>
+        <li>The UI records term changes observed from the selected node.</li>
       </UL>
 
-      <H2>What automatic failover guarantees</H2>
+      <H2>Current limitations</H2>
       <UL>
-        <li>At most one acknowledged leader per slot at any term.</li>
-        <li>Writes accepted by an old leader after the term has advanced are dropped, not silently double-applied.</li>
-        <li>Reads during the gap may fail temporarily, then succeed against the new leader.</li>
-      </UL>
-
-      <H2>What it does <em>not</em> guarantee</H2>
-      <UL>
-        <li>Zero downtime. There is always a short window where the slot has no leader.</li>
-        <li>No data loss in async replication mode. The few writes still in the leader's outbound queue are gone.</li>
+        <li>Candidate selection is not a quorum vote and does not compare replica freshness.</li>
+        <li>Nodes do not have a protocol that guarantees agreement on one leader.</li>
+        <li>Terms and sequences are not checked when replicated commands are applied.</li>
+        <li>Async write fencing currently happens after local mutation, so rejection can be too late.</li>
+        <li>There is no implemented catch-up flow for a returning node.</li>
       </UL>
 
       <Callout>
-        Run a 3-node cluster, watch the cluster page in the Use section, then kill the leader.
-        You will see the term advance, a follower take over, and any in-flight stale writes
-        rejected. That visible feedback loop is the point of building the failover demo in the
-        first place.
+        Do not use the current prototype to demonstrate safe automatic failover. A valid exercise
+        is to stop a node, compare the local observations reported by the remaining nodes, and
+        identify where they disagree. Auto-failover should stay off in demo configs until the
+        backend has an agreed election and fencing design.
       </Callout>
     </>
   )

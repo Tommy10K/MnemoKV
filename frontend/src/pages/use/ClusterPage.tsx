@@ -2,8 +2,10 @@ import { useMemo } from "react"
 import type { PeerStatus } from "@/api/types"
 import { TopologyGraph } from "@/components/cluster/TopologyGraph"
 import { useClusterState, type TermChange } from "@/hooks/useClusterState"
+import { useAppStore } from "@/store/appStore"
 
 export function ClusterPage() {
+  const baseUrl = useAppStore((state) => state.apiBaseUrl)
   const { state, reachable, termHistory } = useClusterState()
 
   if (!reachable || state === null) {
@@ -19,7 +21,7 @@ export function ClusterPage() {
     return <StandaloneView nodeId={state.nodeId} />
   }
 
-  return <ClusterView state={state} termHistory={termHistory} />
+  return <ClusterView state={state} termHistory={termHistory} baseUrl={baseUrl} />
 }
 
 function StandaloneView({ nodeId }: { nodeId: string }) {
@@ -57,9 +59,10 @@ type ClusterViewProps = {
     membership?: PeerStatus[]
   }
   termHistory: TermChange[]
+  baseUrl: string
 }
 
-function ClusterView({ state, termHistory }: ClusterViewProps) {
+function ClusterView({ state, termHistory, baseUrl }: ClusterViewProps) {
   const peers = useMemo<PeerStatus[]>(
     () => fillMissing(state.membership ?? [], state.peers, state.nodeId),
     [state.membership, state.peers, state.nodeId],
@@ -73,18 +76,27 @@ function ClusterView({ state, termHistory }: ClusterViewProps) {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-2xl font-semibold text-white">Cluster</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-semibold text-white">Cluster prototype</h1>
+          <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs uppercase tracking-wide text-amber-300">
+            experimental
+          </span>
+        </div>
         <p className="text-sm text-[#9ca3af]">
-          Live view of cluster membership. Colors reflect gossip state; the dashed edges connect
-          to nodes the gossip layer has lost contact with.
+          Local membership view reported by <span className="font-mono text-white">{state.nodeId}</span>{" "}
+          at <span className="font-mono">{baseUrl}</span>. It is not a cluster-wide agreement view.
+        </p>
+        <p className="mt-2 text-xs text-amber-300">
+          Routing is not connected to live commands, membership uses all-to-all heartbeats, and
+          automatic failover does not yet guarantee one leader or prevent split brain.
         </p>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Term">{state.term ?? 0}</StatCard>
-        <StatCard label="Write mode">{state.writeMode || "—"}</StatCard>
-        <StatCard label="Auto failover">{state.autoFailover ? "on" : "off"}</StatCard>
-        <StatCard label="Healthy peers">
+        <StatCard label="Write fan-out">{writeModeLabel(state.writeMode)}</StatCard>
+        <StatCard label="Auto failover config">{state.autoFailover ? "on" : "off"}</StatCard>
+        <StatCard label="Observed healthy">
           {(counts.healthy ?? 0)}/{peers.length}
         </StatCard>
       </div>
@@ -122,7 +134,7 @@ function ClusterView({ state, termHistory }: ClusterViewProps) {
         </section>
 
         <section className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4">
-          <h2 className="mb-3 text-sm uppercase tracking-wide text-[#6b7280]">Failover timeline</h2>
+          <h2 className="mb-3 text-sm uppercase tracking-wide text-[#6b7280]">Local term observations</h2>
           {termHistory.length === 0 ? (
             <p className="text-sm text-[#6b7280]">
               No term changes recorded yet. Term {state.term ?? 0} is the starting term.
@@ -163,6 +175,7 @@ function StateDot({ state }: { state: string }) {
     recovering: "bg-sky-400 text-sky-300",
     suspect: "bg-yellow-400 text-yellow-300",
     unavailable: "bg-red-500 text-red-300",
+    unknown: "bg-gray-400 text-gray-300",
   }
   const cls = colors[state] ?? "bg-gray-400 text-gray-300"
   const [dot, text] = cls.split(" ")
@@ -174,9 +187,8 @@ function StateDot({ state }: { state: string }) {
   )
 }
 
-// fillMissing makes sure every configured peer shows up in the table even
-// when the membership view has not yet learned about it. Anything missing
-// is reported as recovering so the UI does not silently drop nodes.
+// Keep configured peers visible without inventing a recovery state when the
+// reporting node has not supplied an observation for them.
 function fillMissing(membership: PeerStatus[], peers: string[], selfId: string): PeerStatus[] {
   const byId = new Map(membership.map((m) => [m.id, m]))
   const out: PeerStatus[] = []
@@ -185,7 +197,7 @@ function fillMissing(membership: PeerStatus[], peers: string[], selfId: string):
     if (byId.has(id)) {
       out.push(byId.get(id)!)
     } else {
-      out.push({ id, address: "—", state: id === selfId ? "healthy" : "recovering" })
+      out.push({ id, address: "—", state: id === selfId ? "healthy" : "unknown" })
     }
     seen.add(id)
   }
@@ -196,4 +208,10 @@ function fillMissing(membership: PeerStatus[], peers: string[], selfId: string):
     out.push({ id: selfId, address: "—", state: "healthy" })
   }
   return out
+}
+
+function writeModeLabel(mode: string): string {
+  if (mode === "strong") return "synchronous"
+  if (mode === "async") return "asynchronous"
+  return mode || "—"
 }
