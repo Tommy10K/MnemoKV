@@ -41,7 +41,7 @@ func (z *ZSetValue) Add(score float64, member string) bool {
 }
 
 // Range returns members from rank start to stop inclusive (0-based, supports negatives).
-func (z *ZSetValue) Range(start, stop int) []ZSetMember {
+func (z *ZSetValue) Range(start, stop int64) []ZSetMember {
 	z.mu.RLock()
 	defer z.mu.RUnlock()
 

@@ -13,12 +13,20 @@ type Parser struct {
 	// maxBulkLen caps the size of any single bulk string. It guards against
 	// hostile clients claiming to send gigabytes per request.
 	maxBulkLen int
+	// maxArrayLen bounds argument count before any bulk strings are read.
+	maxArrayLen int
+	// maxCommandLen bounds the aggregate bytes retained for one command.
+	maxCommandLen int
 }
 
-// NewParser returns a parser with reasonable defaults. The default bulk-string
-// cap (32 MiB) matches Redis's behaviour closely enough for the baseline.
+// NewParser returns a parser with project-level safety limits for one argument,
+// total argument bytes, and argument count.
 func NewParser() *Parser {
-	return &Parser{maxBulkLen: 32 * 1024 * 1024}
+	return &Parser{
+		maxBulkLen:    32 * 1024 * 1024,
+		maxArrayLen:   1024 * 1024,
+		maxCommandLen: 64 * 1024 * 1024,
+	}
 }
 
 // Next reads a single command from r. It supports two encodings:
@@ -47,7 +55,7 @@ func (p *Parser) parseInline(r *bufio.Reader) (*Command, error) {
 	}
 	parts := splitInline(trimTrailingCRLF(line))
 	if len(parts) == 0 {
-		return nil, ErrEmptyCommand
+		return nil, ErrEmptyLine
 	}
 	cmd := acquireCommand()
 	cmd.Name = upper(parts[0])
@@ -64,7 +72,7 @@ func (p *Parser) parseArray(r *bufio.Reader) (*Command, error) {
 		return nil, ErrProtocol
 	}
 	n, err := strconv.Atoi(string(header[1:]))
-	if err != nil || n < 0 {
+	if err != nil || n < 0 || n > p.maxArrayLen {
 		return nil, ErrProtocol
 	}
 	if n == 0 {
@@ -72,13 +80,23 @@ func (p *Parser) parseArray(r *bufio.Reader) (*Command, error) {
 	}
 
 	cmd := acquireCommand()
+	totalLen := 0
 	for i := 0; i < n; i++ {
 		bulk, err := p.readBulk(r)
 		if err != nil {
 			Release(cmd)
 			return nil, err
 		}
+		if len(bulk) > p.maxCommandLen-totalLen {
+			Release(cmd)
+			return nil, ErrProtocol
+		}
+		totalLen += len(bulk)
 		if i == 0 {
+			if len(bulk) == 0 {
+				Release(cmd)
+				return nil, ErrEmptyCommand
+			}
 			cmd.Name = upper(bulk)
 		} else {
 			cmd.Args = append(cmd.Args, bulk)

@@ -48,6 +48,13 @@ func (h *connectionHandler) serve() {
 		h.applyReadDeadline()
 		cmd, err := h.parser.Next(h.reader)
 		if err != nil {
+			if errors.Is(err, resp.ErrEmptyLine) {
+				continue
+			}
+			if errors.Is(err, resp.ErrEmptyCommand) {
+				_ = h.writeFrame(resp.NewError("ERR", "empty command"))
+				continue
+			}
 			h.handleParseError(err)
 			return
 		}
@@ -57,7 +64,7 @@ func (h *connectionHandler) serve() {
 		h.sink.ObserveLatency("command_latency", time.Since(start), cmd.Name)
 		h.sink.IncCounter("commands_total", cmd.Name)
 
-		quit := cmd.Name == "QUIT"
+		quit := cmd.Name == "QUIT" && len(cmd.Args) == 0
 		resp.Release(cmd)
 
 		if err := h.writeFrame(frame); err != nil {
@@ -98,9 +105,6 @@ func (h *connectionHandler) handleParseError(err error) {
 		// Clean disconnect.
 	case errors.Is(err, net.ErrClosed):
 		// Listener shut down; drop the connection silently.
-	case errors.Is(err, resp.ErrEmptyCommand):
-		// Empty inline line (just a CR/LF). Acceptable; loop again.
-		log.Printf("server: empty command on %s", h.conn.RemoteAddr())
 	case errors.Is(err, resp.ErrProtocol):
 		_ = h.writeFrame(frameProtocolError)
 	default:

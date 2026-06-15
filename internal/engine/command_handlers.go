@@ -68,7 +68,10 @@ func (x *Executor) cmdExpire(cmd *resp.Command) resp.Frame {
 		}
 		return resp.Integer(0)
 	}
-	expiresAt := nowNanos() + seconds*int64(1_000_000_000)
+	expiresAt, ok := expirationFromNow(seconds, int64(1_000_000_000))
+	if !ok {
+		return resp.NewError("ERR", "invalid expire time in 'expire' command")
+	}
 	if x.store.SetExpireAt(cmd.Args[0], expiresAt) {
 		return resp.Integer(1)
 	}

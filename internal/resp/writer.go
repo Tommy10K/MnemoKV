@@ -50,7 +50,7 @@ func (w *Writer) writeSimpleString(s string) error {
 	if err := w.bw.WriteByte('+'); err != nil {
 		return err
 	}
-	if _, err := w.bw.WriteString(s); err != nil {
+	if err := writeLineText(w.bw, s); err != nil {
 		return err
 	}
 	_, err := w.bw.WriteString("\r\n")
@@ -65,16 +65,34 @@ func (w *Writer) writeError(e Error) error {
 	if err := w.bw.WriteByte('-'); err != nil {
 		return err
 	}
-	if _, err := w.bw.WriteString(prefix); err != nil {
+	if err := writeLineText(w.bw, prefix); err != nil {
 		return err
 	}
 	if err := w.bw.WriteByte(' '); err != nil {
 		return err
 	}
-	if _, err := w.bw.WriteString(e.Message); err != nil {
+	if err := writeLineText(w.bw, e.Message); err != nil {
 		return err
 	}
 	_, err := w.bw.WriteString("\r\n")
+	return err
+}
+
+func writeLineText(w *bufio.Writer, value string) error {
+	start := 0
+	for i := 0; i < len(value); i++ {
+		if value[i] != '\r' && value[i] != '\n' {
+			continue
+		}
+		if _, err := w.WriteString(value[start:i]); err != nil {
+			return err
+		}
+		if err := w.WriteByte(' '); err != nil {
+			return err
+		}
+		start = i + 1
+	}
+	_, err := w.WriteString(value[start:])
 	return err
 }
 

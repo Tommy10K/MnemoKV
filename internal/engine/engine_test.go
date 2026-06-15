@@ -1,7 +1,9 @@
 package engine
 
 import (
+	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mnemokv/mnemokv/internal/config"
@@ -73,6 +75,57 @@ func TestSetWithNXXX(t *testing.T) {
 	mustNullBulk(t, exec(t, e, "SET", "missing", "x", "XX"))
 }
 
+func TestConcurrentSetNXIsAtomic(t *testing.T) {
+	e := newTestEngine()
+	const workers = 32
+	start := make(chan struct{})
+	var successes atomic.Int64
+	var failures atomic.Int64
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go func(value string) {
+			defer wg.Done()
+			<-start
+			switch f := exec(t, e, "SET", "shared", value, "NX").(type) {
+			case resp.SimpleString:
+				if f == "OK" {
+					successes.Add(1)
+				}
+			case resp.BulkString:
+				if f.Null {
+					failures.Add(1)
+				}
+			}
+		}(fmt.Sprintf("value-%d", i))
+	}
+	close(start)
+	wg.Wait()
+	if got := successes.Load(); got != 1 {
+		t.Fatalf("expected exactly one successful NX write, got %d", got)
+	}
+	if got := failures.Load(); got != workers-1 {
+		t.Fatalf("expected %d failed NX writes, got %d", workers-1, got)
+	}
+}
+
+func TestSetOptionValidation(t *testing.T) {
+	e := newTestEngine()
+	cases := [][]string{
+		{"k", "v", "EX", "1", "EX", "2"},
+		{"k", "v", "PX", "1", "PX", "2"},
+		{"k", "v", "EX", "1", "PX", "2"},
+		{"k", "v", "EX", "9223372036854775807"},
+		{"k", "v", "PX", "9223372036854775807"},
+	}
+	for _, args := range cases {
+		if _, ok := exec(t, e, "SET", args...).(resp.Error); !ok {
+			t.Fatalf("expected SET error for %q", args)
+		}
+	}
+	mustInt(t, exec(t, e, "EXISTS", "k"), 0)
+}
+
 func TestIncr(t *testing.T) {
 	e := newTestEngine()
 	mustInt(t, exec(t, e, "INCR", "c"), 1)
@@ -81,6 +134,16 @@ func TestIncr(t *testing.T) {
 	mustOK(t, exec(t, e, "SET", "junk", "abc"))
 	if _, ok := exec(t, e, "INCR", "junk").(resp.Error); !ok {
 		t.Fatal("expected error on non-integer INCR")
+	}
+}
+
+func TestIncrRejectsNonCanonicalIntegers(t *testing.T) {
+	e := newTestEngine()
+	for _, value := range []string{"01", "+1", "-0"} {
+		mustOK(t, exec(t, e, "SET", "k", value))
+		if _, ok := exec(t, e, "INCR", "k").(resp.Error); !ok {
+			t.Fatalf("expected INCR to reject %q", value)
+		}
 	}
 }
 
@@ -96,6 +159,15 @@ func TestExpireAndTTL(t *testing.T) {
 	mustInt(t, exec(t, e, "EXPIRE", "k", "0"), 1) // negative TTL deletes
 	mustInt(t, exec(t, e, "EXISTS", "k"), 0)
 	mustInt(t, exec(t, e, "EXPIRE", "missing", "10"), 0)
+}
+
+func TestExpireRejectsOverflow(t *testing.T) {
+	e := newTestEngine()
+	mustOK(t, exec(t, e, "SET", "k", "v"))
+	if _, ok := exec(t, e, "EXPIRE", "k", "9223372036854775807").(resp.Error); !ok {
+		t.Fatal("expected overflow error")
+	}
+	mustBulk(t, exec(t, e, "GET", "k"), "v")
 }
 
 func TestPing(t *testing.T) {
@@ -142,4 +214,40 @@ func TestFlush(t *testing.T) {
 	}
 	mustOK(t, exec(t, e, "FLUSHDB"))
 	mustInt(t, exec(t, e, "EXISTS", "a"), 0)
+}
+
+func TestUtilityCommandArity(t *testing.T) {
+	e := newTestEngine()
+	mustOK(t, exec(t, e, "SET", "k", "v"))
+	for _, name := range []string{"QUIT", "FLUSHDB", "FLUSHALL"} {
+		if _, ok := exec(t, e, name, "extra").(resp.Error); !ok {
+			t.Fatalf("expected %s arity error", name)
+		}
+	}
+	mustBulk(t, exec(t, e, "GET", "k"), "v")
+}
+
+func TestConcurrentReadsAndMetadataWrites(t *testing.T) {
+	e := newTestEngine()
+	mustOK(t, exec(t, e, "SET", "k", "0"))
+	var wg sync.WaitGroup
+	wg.Add(4)
+	for i := 0; i < 4; i++ {
+		go func(worker int) {
+			defer wg.Done()
+			for j := 0; j < 1000; j++ {
+				switch worker {
+				case 0:
+					exec(t, e, "GET", "k")
+				case 1:
+					exec(t, e, "INCR", "k")
+				case 2:
+					exec(t, e, "TTL", "k")
+				case 3:
+					exec(t, e, "EXPIRE", "k", "60")
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
 }

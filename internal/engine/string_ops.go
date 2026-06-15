@@ -18,62 +18,58 @@ func (x *Executor) cmdSet(cmd *resp.Command) resp.Frame {
 	value := cmd.Args[1]
 
 	var (
-		expiresAtNs int64
-		nx, xx      bool
+		expiresAtNs   int64
+		hasExpiration bool
+		condition     = setAlways
 	)
 
 	for i := 2; i < len(cmd.Args); i++ {
 		switch upperASCII(cmd.Args[i]) {
 		case "EX":
-			if i+1 >= len(cmd.Args) {
+			if hasExpiration || i+1 >= len(cmd.Args) {
 				return resp.NewError("ERR", "syntax error")
 			}
 			secs, ok := parseInt64(cmd.Args[i+1])
-			if !ok || secs <= 0 {
+			if !ok {
+				return resp.NewError("ERR", "value is not an integer or out of range")
+			}
+			expiresAtNs, ok = expirationFromNow(secs, int64(1_000_000_000))
+			if !ok {
 				return resp.NewError("ERR", "invalid expire time in 'set' command")
 			}
-			expiresAtNs = nowNanos() + secs*int64(1_000_000_000)
+			hasExpiration = true
 			i++
 		case "PX":
-			if i+1 >= len(cmd.Args) {
+			if hasExpiration || i+1 >= len(cmd.Args) {
 				return resp.NewError("ERR", "syntax error")
 			}
 			ms, ok := parseInt64(cmd.Args[i+1])
-			if !ok || ms <= 0 {
+			if !ok {
+				return resp.NewError("ERR", "value is not an integer or out of range")
+			}
+			expiresAtNs, ok = expirationFromNow(ms, int64(1_000_000))
+			if !ok {
 				return resp.NewError("ERR", "invalid expire time in 'set' command")
 			}
-			expiresAtNs = nowNanos() + ms*int64(1_000_000)
+			hasExpiration = true
 			i++
 		case "NX":
-			nx = true
+			if condition == setIfPresent {
+				return resp.NewError("ERR", "syntax error")
+			}
+			condition = setIfMissing
 		case "XX":
-			xx = true
+			if condition == setIfMissing {
+				return resp.NewError("ERR", "syntax error")
+			}
+			condition = setIfPresent
 		default:
 			return resp.NewError("ERR", "syntax error")
 		}
 	}
-	if nx && xx {
-		return resp.NewError("ERR", "syntax error")
+	if !x.store.setString(key, value, expiresAtNs, condition) {
+		return resp.NullBulk
 	}
-
-	if nx || xx {
-		exists := x.store.Exists(key)
-		if nx && exists {
-			return resp.NullBulk
-		}
-		if xx && !exists {
-			return resp.NullBulk
-		}
-	}
-
-	entry := &Entry{
-		Key:         string(key),
-		Type:        ValueTypeString,
-		Value:       NewStringValue(append([]byte(nil), value...)),
-		SizeBytes:   stringEntrySize(key, value),
-		ExpiresAtNs: expiresAtNs,
-	}
-	x.store.Put(entry)
 	return resp.OK
 }
 
@@ -119,12 +115,30 @@ func (x *Executor) cmdIncr(cmd *resp.Command) resp.Frame {
 	}
 }
 
-// parseInt64 parses a base-10 signed integer from a byte slice. It rejects
-// leading zeros only when followed by more digits (so "0" is fine but "01"
-// is not, matching Redis).
+// parseInt64 parses Redis's canonical base-10 integer representation. It
+// accepts "0" and negative non-zero values, but rejects plus signs, leading
+// zeros, negative zero, non-digits, and values outside int64.
 func parseInt64(b []byte) (int64, bool) {
 	if len(b) == 0 {
 		return 0, false
+	}
+	if len(b) == 1 && b[0] == '0' {
+		return 0, true
+	}
+	i := 0
+	if b[0] == '-' {
+		if len(b) == 1 {
+			return 0, false
+		}
+		i = 1
+	}
+	if b[i] < '1' || b[i] > '9' {
+		return 0, false
+	}
+	for i++; i < len(b); i++ {
+		if b[i] < '0' || b[i] > '9' {
+			return 0, false
+		}
 	}
 	v, err := strconv.ParseInt(string(b), 10, 64)
 	if err != nil {

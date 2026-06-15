@@ -47,11 +47,44 @@ func TestParseInline(t *testing.T) {
 	}
 }
 
+func TestParseEmptyInlineLine(t *testing.T) {
+	p := NewParser()
+	r := bufio.NewReader(strings.NewReader("\r\n"))
+	if _, err := p.Next(r); err != ErrEmptyLine {
+		t.Fatalf("expected ErrEmptyLine, got %v", err)
+	}
+}
+
 func TestParserRejectsMalformed(t *testing.T) {
 	p := NewParser()
 	r := bufio.NewReader(strings.NewReader("*2\r\n$3\r\nSET\r\nbroken"))
 	if _, err := p.Next(r); err == nil {
 		t.Fatalf("expected error")
+	}
+}
+
+func TestParserRejectsEmptyCommandName(t *testing.T) {
+	p := NewParser()
+	r := bufio.NewReader(strings.NewReader("*1\r\n$0\r\n\r\n"))
+	if _, err := p.Next(r); err != ErrEmptyCommand {
+		t.Fatalf("expected ErrEmptyCommand, got %v", err)
+	}
+}
+
+func TestParserRejectsOversizedArray(t *testing.T) {
+	p := NewParser()
+	r := bufio.NewReader(strings.NewReader("*1048577\r\n"))
+	if _, err := p.Next(r); err != ErrProtocol {
+		t.Fatalf("expected ErrProtocol, got %v", err)
+	}
+}
+
+func TestParserRejectsOversizedAggregateCommand(t *testing.T) {
+	p := NewParser()
+	p.maxCommandLen = 5
+	r := bufio.NewReader(strings.NewReader("*2\r\n$3\r\nSET\r\n$3\r\nkey\r\n"))
+	if _, err := p.Next(r); err != ErrProtocol {
+		t.Fatalf("expected ErrProtocol, got %v", err)
 	}
 }
 
@@ -81,6 +114,20 @@ func TestWriterRoundTrip(t *testing.T) {
 		if got := buf.String(); got != tc.want {
 			t.Fatalf("%s: got %q, want %q", name, got, tc.want)
 		}
+	}
+}
+
+func TestWriterSanitizesLineFrames(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+	if err := w.WriteFrame(NewError("ERR\rX", "bad\nreply")); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := buf.String(), "-ERR X bad reply\r\n"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }
 

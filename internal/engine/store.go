@@ -77,8 +77,10 @@ func (s *Store) adjustUsed(oldSize, newSize uint64) {
 	}
 }
 
-// Get returns a snapshot view of the entry. Lazy expiration: if the entry has
-// expired, it is deleted in place and the call returns (nil, false).
+// Get returns a shallow snapshot of the entry. Value objects are immutable
+// strings or independently synchronized containers, so copying the Entry
+// prevents callers from racing with metadata and value-pointer updates after
+// the stripe lock is released.
 func (s *Store) Get(key []byte) (*Entry, bool) {
 	st := s.stripeFor(key)
 	now := nowNanos()
@@ -95,7 +97,8 @@ func (s *Store) Get(key []byte) (*Entry, bool) {
 		return nil, false
 	}
 	e.touchRead(now)
-	return e, true
+	snapshot := *e
+	return &snapshot, true
 }
 
 // Put inserts or replaces the entry under its key. The caller is responsible
@@ -112,14 +115,75 @@ func (s *Store) Put(entry *Entry) {
 		s.subUsed(existing.SizeBytes)
 		entry.CreatedAtNs = existing.CreatedAtNs
 		entry.AccessCount = existing.AccessCount
+		entry.Version = existing.Version + 1
 	} else {
 		entry.CreatedAtNs = now
+		entry.Version = 1
 	}
 	entry.UpdatedAtNs = now
 	entry.LastAccessNs = now
-	entry.Version++
 	st.entries[entry.Key] = entry
 	s.addUsed(entry.SizeBytes)
+}
+
+type setCondition uint8
+
+const (
+	setAlways setCondition = iota
+	setIfMissing
+	setIfPresent
+)
+
+// setString checks the condition and writes the new value while holding one
+// stripe lock. This makes SET NX/XX a single atomic store operation.
+func (s *Store) setString(key, value []byte, expiresAtNs int64, condition setCondition) bool {
+	st := s.stripeFor(key)
+	now := nowNanos()
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	existing, exists := st.entries[string(key)]
+	if exists && existing.IsExpired(now) {
+		delete(st.entries, existing.Key)
+		s.subUsed(existing.SizeBytes)
+		existing = nil
+		exists = false
+	}
+
+	if condition != setAlways && exists {
+		// Preserve the previous conditional-SET access semantics without
+		// releasing the stripe lock between the check and the write.
+		existing.touchRead(now)
+	}
+	if condition == setIfMissing && exists {
+		return false
+	}
+	if condition == setIfPresent && !exists {
+		return false
+	}
+
+	entry := &Entry{
+		Key:          string(key),
+		Type:         ValueTypeString,
+		Value:        NewStringValue(append([]byte(nil), value...)),
+		SizeBytes:    stringEntrySize(key, value),
+		ExpiresAtNs:  expiresAtNs,
+		CreatedAtNs:  now,
+		UpdatedAtNs:  now,
+		LastAccessNs: now,
+		AccessCount:  1,
+		Version:      1,
+	}
+	if exists {
+		entry.CreatedAtNs = existing.CreatedAtNs
+		entry.AccessCount = existing.AccessCount
+		entry.Version = existing.Version + 1
+		s.adjustUsed(existing.SizeBytes, entry.SizeBytes)
+	} else {
+		s.addUsed(entry.SizeBytes)
+	}
+	st.entries[entry.Key] = entry
+	return true
 }
 
 // Delete removes the entry under key, if any. It returns true if a key was
