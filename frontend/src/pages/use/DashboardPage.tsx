@@ -146,7 +146,7 @@ function OfflineNotice({ baseUrl }: { baseUrl: string }) {
       <p className="text-white">Backend not reachable at {baseUrl}.</p>
       <p className="mt-2">Start a node and try again, for example:</p>
       <pre className="mt-2 overflow-x-auto rounded bg-[#0d1117] p-3 font-mono text-xs text-[#e6edf3]">
-        go run ./cmd/node configs/standalone.yaml
+        go run ./cmd/node -config configs/standalone.yaml
       </pre>
     </div>
   )

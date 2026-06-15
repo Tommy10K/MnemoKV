@@ -144,7 +144,7 @@ export function WorkloadsPage() {
         <p className="mt-3 text-xs text-[#6b7280]">
           The workload generator opens its own RESP connections to{" "}
           <span className="font-mono">{addr}</span>. Start a node first with{" "}
-          <span className="font-mono">go run ./cmd/node configs/standalone.yaml</span>.
+          <span className="font-mono">go run ./cmd/node -config configs/standalone.yaml</span>.
         </p>
       </section>
     </div>
