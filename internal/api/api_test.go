@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/mnemokv/mnemokv/internal/cluster"
@@ -43,6 +44,31 @@ func TestHealth(t *testing.T) {
 	}
 	if resp.Status != "ok" || resp.NodeID != "test" {
 		t.Fatalf("unexpected response: %+v", resp)
+	}
+}
+
+func TestReadHandlersRejectWrongMethods(t *testing.T) {
+	s := newTestServer()
+	cases := []struct {
+		path    string
+		handler http.HandlerFunc
+	}{
+		{"/health", s.handleHealth},
+		{"/engine/state", s.handleEngineState},
+		{"/metrics/summary", s.handleMetricsSummary},
+		{"/cluster/state", s.handleClusterState},
+		{"/events", s.handleEvents},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodPost, tc.path, nil)
+		rr := httptest.NewRecorder()
+		tc.handler(rr, req)
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("%s: expected 405, got %d", tc.path, rr.Code)
+		}
+		if allow := rr.Header().Get("Allow"); allow != http.MethodGet {
+			t.Fatalf("%s: Allow=%q, want GET", tc.path, allow)
+		}
 	}
 }
 
@@ -109,6 +135,53 @@ func TestCommands(t *testing.T) {
 	}
 	if got := send("NOPE"); got.Type != "error" {
 		t.Fatalf("NOPE: %+v", got)
+	}
+}
+
+func TestCommandsRejectTrailingJSON(t *testing.T) {
+	s := newTestServer()
+	req := httptest.NewRequest(http.MethodPost, "/commands", strings.NewReader(`{"args":["PING"]} {"args":["PING"]}`))
+	rr := httptest.NewRecorder()
+
+	s.handleCommands(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestCommandsRejectOversizedBody(t *testing.T) {
+	s := newTestServer()
+	body := `{"args":["PING","` + strings.Repeat("x", int(maxJSONBodyBytes)+1) + `"]}`
+	req := httptest.NewRequest(http.MethodPost, "/commands", strings.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	s.handleCommands(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestPostHandlersRejectWrongMethods(t *testing.T) {
+	s := newTestServer()
+	cases := []struct {
+		path    string
+		handler http.HandlerFunc
+	}{
+		{"/commands", s.handleCommands},
+		{"/engine/eviction-policy", s.handleEvictionPolicy},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		rr := httptest.NewRecorder()
+		tc.handler(rr, req)
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("%s: expected 405, got %d", tc.path, rr.Code)
+		}
+		if allow := rr.Header().Get("Allow"); allow != http.MethodPost {
+			t.Fatalf("%s: Allow=%q, want POST", tc.path, allow)
+		}
 	}
 }
 

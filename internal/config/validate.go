@@ -3,16 +3,18 @@ package config
 import (
 	"fmt"
 	"strings"
+
+	"github.com/mnemokv/mnemokv/internal/logging"
 )
 
 // validEvictionPolicies enumerates the policy names the engine recognizes.
 // The set is intentionally small at the baseline milestone.
 var validEvictionPolicies = map[string]struct{}{
 	"noeviction": {},
-	"fifo":        {},
-	"lru":         {},
-	"lfu":         {},
-	"random":      {},
+	"fifo":       {},
+	"lru":        {},
+	"lfu":        {},
+	"random":     {},
 }
 
 var validWriteSafetyModes = map[string]struct{}{
@@ -34,6 +36,17 @@ func (c *Config) Validate() error {
 	if c.Network.MaxConnections <= 0 {
 		return fmt.Errorf("network.maxConnections must be positive")
 	}
+	logLevel := strings.ToLower(c.Observability.LogLevel)
+	if logLevel == "" {
+		logLevel = "info"
+	}
+	if logLevel == "warning" {
+		logLevel = "warn"
+	}
+	if _, ok := logging.ParseLevel(logLevel); !ok {
+		return fmt.Errorf("observability.logLevel %q is not supported", c.Observability.LogLevel)
+	}
+	c.Observability.LogLevel = logLevel
 
 	if c.Engine.StripeCount <= 0 {
 		return fmt.Errorf("engine.stripeCount must be positive")

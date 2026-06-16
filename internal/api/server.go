@@ -10,6 +10,7 @@ import (
 	"github.com/mnemokv/mnemokv/internal/cluster"
 	"github.com/mnemokv/mnemokv/internal/config"
 	"github.com/mnemokv/mnemokv/internal/engine"
+	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
 )
 
@@ -45,6 +46,7 @@ func (s *Server) Start(ctx context.Context) error {
 		Handler:           withCORS(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	logging.Infof("api: listening on %s", addr)
 
 	errCh := make(chan error, 1)
 	go func() {

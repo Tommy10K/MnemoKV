@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -18,19 +17,18 @@ type evictionPolicyResponse struct {
 
 var validPolicies = map[string]struct{}{
 	"noeviction": {},
-	"fifo":        {},
-	"lru":         {},
-	"lfu":         {},
-	"random":      {},
+	"fifo":       {},
+	"lru":        {},
+	"lfu":        {},
+	"random":     {},
 }
 
 func (s *Server) handleEvictionPolicy(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	var req evictionPolicyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(w, r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json body"})
 		return
 	}

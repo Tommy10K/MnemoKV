@@ -16,6 +16,7 @@ import (
 	"github.com/mnemokv/mnemokv/internal/cluster"
 	"github.com/mnemokv/mnemokv/internal/config"
 	"github.com/mnemokv/mnemokv/internal/engine"
+	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
 	"github.com/mnemokv/mnemokv/internal/server"
 )
@@ -28,7 +29,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
-	log.Printf("node: starting %s mode=%s", cfg.Node.ID, cfg.Node.Mode)
+	logging.SetLevel(cfg.Observability.LogLevel)
+	logging.Infof("node: starting %s mode=%s", cfg.Node.ID, cfg.Node.Mode)
 
 	sink := metrics.NewInMemory(2048)
 	eng := engine.NewWithMetrics(cfg.Engine, sink)
@@ -52,27 +54,27 @@ func main() {
 
 	select {
 	case <-ctx.Done():
-		log.Printf("node: shutdown signal received")
+		logging.Infof("node: shutdown signal received")
 	case err := <-serverDone:
 		if err != nil {
-			log.Printf("server: exited: %v", err)
+			logging.Errorf("server: exited: %v", err)
 		}
 	case err := <-apiDone:
 		if err != nil {
-			log.Printf("api: exited: %v", err)
+			logging.Errorf("api: exited: %v", err)
 		}
 	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("server: shutdown: %v", err)
+		logging.Warnf("server: shutdown: %v", err)
 	}
 	if err := apiSrv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("api: shutdown: %v", err)
+		logging.Warnf("api: shutdown: %v", err)
 	}
 	if err := clusterMgr.Shutdown(shutdownCtx); err != nil {
-		log.Printf("cluster: shutdown: %v", err)
+		logging.Warnf("cluster: shutdown: %v", err)
 	}
-	log.Printf("node: stopped")
+	logging.Infof("node: stopped")
 }

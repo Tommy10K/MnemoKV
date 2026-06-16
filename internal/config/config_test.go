@@ -62,3 +62,32 @@ func TestValidateRejectsClusterFlagsWithoutEnabled(t *testing.T) {
 		t.Fatalf("expected validation failure")
 	}
 }
+
+func TestValidateRejectsUnknownLogLevel(t *testing.T) {
+	c := &Config{
+		Node:          NodeConfig{ID: "n"},
+		Network:       NetworkConfig{Port: 6380, MaxConnections: 10},
+		Engine:        EngineConfig{StripeCount: 8, EvictionPolicy: "lru"},
+		Cluster:       ClusterConfig{WriteSafetyMode: "async"},
+		Observability: ObservabilityConfig{LogLevel: "verbose"},
+	}
+	if err := c.Validate(); err == nil {
+		t.Fatalf("expected validation failure")
+	}
+}
+
+func TestValidateNormalizesLogLevel(t *testing.T) {
+	c := &Config{
+		Node:          NodeConfig{ID: "n"},
+		Network:       NetworkConfig{Port: 6380, MaxConnections: 10},
+		Engine:        EngineConfig{StripeCount: 8, EvictionPolicy: "lru"},
+		Cluster:       ClusterConfig{WriteSafetyMode: "async"},
+		Observability: ObservabilityConfig{LogLevel: "WARN"},
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	if c.Observability.LogLevel != "warn" {
+		t.Fatalf("log level = %q, want warn", c.Observability.LogLevel)
+	}
+}

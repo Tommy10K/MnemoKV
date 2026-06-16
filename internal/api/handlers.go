@@ -5,6 +5,9 @@ import (
 )
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
 	writeJSON(w, http.StatusOK, HealthResponse{
 		Status: "ok",
 		NodeID: s.node.ID,
@@ -13,6 +16,9 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEngineState(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
 	mem := s.engine.Memory()
 	policy := s.engine.Eviction().Policy().Name()
 	var rejected uint64
@@ -30,6 +36,9 @@ func (s *Server) handleEngineState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMetricsSummary(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
 	if s.metrics == nil {
 		writeJSON(w, http.StatusOK, MetricsSummary{Counters: map[string]uint64{}})
 		return
@@ -38,6 +47,9 @@ func (s *Server) handleMetricsSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleClusterState(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
 	resp := ClusterStateResponse{
 		Enabled:      s.cluster.Enabled,
 		NodeID:       s.node.ID,

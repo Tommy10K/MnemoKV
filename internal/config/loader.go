@@ -70,4 +70,7 @@ func (c *Config) applyFallbacks() {
 	if c.Cluster.WriteSafetyMode == "" {
 		c.Cluster.WriteSafetyMode = "async"
 	}
+	if c.Observability.LogLevel == "" {
+		c.Observability.LogLevel = "info"
+	}
 }

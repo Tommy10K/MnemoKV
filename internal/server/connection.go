@@ -4,12 +4,12 @@ import (
 	"bufio"
 	"errors"
 	"io"
-	"log"
 	"net"
 	"time"
 
 	"github.com/mnemokv/mnemokv/internal/config"
 	"github.com/mnemokv/mnemokv/internal/engine"
+	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
 	"github.com/mnemokv/mnemokv/internal/resp"
 )
@@ -62,7 +62,6 @@ func (h *connectionHandler) serve() {
 		start := time.Now()
 		frame := h.engine.Execute(cmd)
 		h.sink.ObserveLatency("command_latency", time.Since(start), cmd.Name)
-		h.sink.IncCounter("commands_total", cmd.Name)
 
 		quit := cmd.Name == "QUIT" && len(cmd.Args) == 0
 		resp.Release(cmd)
@@ -113,6 +112,6 @@ func (h *connectionHandler) handleParseError(err error) {
 			// Idle connection. Close it.
 			return
 		}
-		log.Printf("server: read from %s: %v", h.conn.RemoteAddr(), err)
+		logging.Warnf("server: read from %s: %v", h.conn.RemoteAddr(), err)
 	}
 }

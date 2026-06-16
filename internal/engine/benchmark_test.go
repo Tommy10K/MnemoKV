@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/mnemokv/mnemokv/internal/config"
@@ -53,8 +54,9 @@ func BenchmarkZADD(b *testing.B) {
 	}
 }
 
-func BenchmarkSETParallel(b *testing.B) {
+func BenchmarkSETHotKeyParallel(b *testing.B) {
 	e := New(config.EngineConfig{StripeCount: 32, EvictionPolicy: "noeviction"})
+	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		cmd := &resp.Command{Name: "SET", Args: [][]byte{[]byte("pkey"), []byte("pval")}}
 		for pb.Next() {
@@ -63,13 +65,51 @@ func BenchmarkSETParallel(b *testing.B) {
 	})
 }
 
-func BenchmarkGETParallel(b *testing.B) {
+func BenchmarkSETDistributedParallel(b *testing.B) {
+	e := New(config.EngineConfig{StripeCount: 32, EvictionPolicy: "noeviction"})
+	cmds := make([]*resp.Command, 1024)
+	for i := range cmds {
+		cmds[i] = &resp.Command{
+			Name: "SET",
+			Args: [][]byte{[]byte(fmt.Sprintf("pkey-%d", i)), []byte("pval")},
+		}
+	}
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			e.Execute(cmds[i&(len(cmds)-1)])
+			i++
+		}
+	})
+}
+
+func BenchmarkGETHotKeyParallel(b *testing.B) {
 	e := New(config.EngineConfig{StripeCount: 32, EvictionPolicy: "noeviction"})
 	e.Execute(&resp.Command{Name: "SET", Args: [][]byte{[]byte("pkey"), []byte("pval")}})
+	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		cmd := &resp.Command{Name: "GET", Args: [][]byte{[]byte("pkey")}}
 		for pb.Next() {
 			e.Execute(cmd)
+		}
+	})
+}
+
+func BenchmarkGETDistributedParallel(b *testing.B) {
+	e := New(config.EngineConfig{StripeCount: 32, EvictionPolicy: "noeviction"})
+	cmds := make([]*resp.Command, 1024)
+	for i := range cmds {
+		key := []byte(fmt.Sprintf("pkey-%d", i))
+		e.Execute(&resp.Command{Name: "SET", Args: [][]byte{key, []byte("pval")}})
+		cmds[i] = &resp.Command{Name: "GET", Args: [][]byte{key}}
+	}
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			e.Execute(cmds[i&(len(cmds)-1)])
+			i++
 		}
 	})
 }
