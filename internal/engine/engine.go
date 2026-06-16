@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mnemokv/mnemokv/internal/config"
@@ -14,13 +15,14 @@ import (
 type WriteHook func(ctx context.Context, cmd *resp.Command) error
 
 type Engine struct {
-	store     *Store
-	executor  *Executor
-	memory    *MemoryTracker
-	eviction  *eviction.Manager
-	metrics   metrics.Sink
-	writeHook WriteHook
-	hookSync  bool
+	store       *Store
+	executor    *Executor
+	memory      *MemoryTracker
+	eviction    *eviction.Manager
+	metrics     metrics.Sink
+	admissionMu sync.Mutex
+	writeHook   WriteHook
+	hookSync    bool
 }
 
 func New(cfg config.EngineConfig) *Engine {
@@ -50,32 +52,19 @@ func (e *Engine) SetWriteHook(hook WriteHook, sync bool) {
 }
 
 func (e *Engine) Execute(cmd *resp.Command) resp.Frame {
-	if e.memory.HasLimit() && e.memory.ExceedsLimit() {
-		overflow := e.memory.Used() - e.memory.Limit()
-		evicted := e.eviction.Run(overflow)
-		if evicted > 0 {
-			e.metrics.IncCounter("eviction.count")
-		}
-	}
-
 	if cmd.Name == "REPLICATE" {
 		return e.applyReplicated(cmd)
 	}
 
-	if e.writeHook != nil && e.hookSync && IsWriteCommand(cmd.Name) {
-		if err := e.writeHook(context.Background(), cmd); err != nil {
-			return resp.NewError("ERR", "replication failed: "+err.Error())
-		}
-	}
-
 	start := time.Now()
-	frame := e.executor.Execute(cmd)
+	var frame resp.Frame
+	if IsWriteCommand(cmd.Name) {
+		frame = e.executeWithAdmission(cmd)
+	} else {
+		frame = e.executor.Execute(cmd)
+	}
 	e.metrics.ObserveLatency("cmd."+strings.ToLower(cmd.Name), time.Since(start))
 	e.metrics.IncCounter("cmd.total")
-
-	if e.writeHook != nil && !e.hookSync && IsWriteCommand(cmd.Name) && !isErrorFrame(frame) {
-		_ = e.writeHook(context.Background(), cmd)
-	}
 	return frame
 }
 

@@ -46,10 +46,10 @@ func TestRandom(t *testing.T) {
 	}
 }
 
-func TestNoop(t *testing.T) {
-	victims := Noop{}.PickVictims(100, []Candidate{{Key: "x", SizeBytes: 100}})
+func TestNoEviction(t *testing.T) {
+	victims := NoEviction{}.PickVictims(100, []Candidate{{Key: "x", SizeBytes: 100}})
 	if len(victims) != 0 {
-		t.Fatal("noop should return no victims")
+		t.Fatal("noeviction should return no victims")
 	}
 }
 
@@ -62,8 +62,9 @@ func TestPolicyByName(t *testing.T) {
 		{"lru", "lru"},
 		{"lfu", "lfu"},
 		{"random", "random"},
-		{"unknown", "noop"},
-		{"", "noop"},
+		{"noeviction", "noeviction"},
+		{"unknown", "noeviction"},
+		{"", "noeviction"},
 	}
 	for _, tc := range cases {
 		p := PolicyByName(tc.name)

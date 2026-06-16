@@ -6,7 +6,6 @@ const defaultSampleSize = 16
 
 type Store interface {
 	Sample(n int) []Candidate
-	Delete(key []byte) bool
 }
 
 type Manager struct {
@@ -31,21 +30,27 @@ func (m *Manager) SetPolicy(p Policy) {
 	m.policy = p
 }
 
-func (m *Manager) Run(bytesNeeded uint64) int {
+func (m *Manager) PickVictims(bytesNeeded uint64, excludeKey string) []Candidate {
 	m.mu.Lock()
 	policy := m.policy
 	m.mu.Unlock()
 
 	candidates := m.store.Sample(defaultSampleSize)
 	if len(candidates) == 0 {
-		return 0
+		return nil
 	}
-	victims := policy.PickVictims(bytesNeeded, candidates)
-	evicted := 0
-	for _, v := range victims {
-		if m.store.Delete([]byte(v.Key)) {
-			evicted++
+
+	if excludeKey != "" {
+		filtered := candidates[:0]
+		for _, candidate := range candidates {
+			if candidate.Key != excludeKey {
+				filtered = append(filtered, candidate)
+			}
 		}
+		candidates = filtered
 	}
-	return evicted
+	if len(candidates) == 0 {
+		return nil
+	}
+	return policy.PickVictims(bytesNeeded, candidates)
 }

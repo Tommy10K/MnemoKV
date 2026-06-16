@@ -8,11 +8,11 @@ import (
 // validEvictionPolicies enumerates the policy names the engine recognizes.
 // The set is intentionally small at the baseline milestone.
 var validEvictionPolicies = map[string]struct{}{
-	"noop":   {},
-	"fifo":   {},
-	"lru":    {},
-	"lfu":    {},
-	"random": {},
+	"noeviction": {},
+	"fifo":        {},
+	"lru":         {},
+	"lfu":         {},
+	"random":      {},
 }
 
 var validWriteSafetyModes = map[string]struct{}{

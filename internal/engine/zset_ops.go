@@ -13,13 +13,9 @@ func (x *Executor) cmdZAdd(cmd *resp.Command) resp.Frame {
 	}
 	key := cmd.Args[0]
 
-	pairs := make([]zsetPair, 0, (len(cmd.Args)-1)/2)
-	for i := 1; i < len(cmd.Args); i += 2 {
-		score, err := strconv.ParseFloat(string(cmd.Args[i]), 64)
-		if err != nil || math.IsNaN(score) {
-			return resp.NewError("ERR", "value is not a valid float")
-		}
-		pairs = append(pairs, zsetPair{score: score, member: string(cmd.Args[i+1])})
+	pairs, frame := parseZAddPairs(cmd.Args[1:])
+	if frame != nil {
+		return frame
 	}
 
 	added, err := x.store.zsetAdd(key, pairs)
@@ -78,7 +74,7 @@ func (x *Executor) cmdZCard(cmd *resp.Command) resp.Frame {
 	if len(cmd.Args) != 1 {
 		return wrongArgs("zcard")
 	}
-	e, ok := x.store.Get(cmd.Args[0])
+	e, ok := x.store.Peek(cmd.Args[0])
 	if !ok {
 		return resp.Integer(0)
 	}
@@ -122,6 +118,21 @@ func formatFloat64(value float64) string {
 type zsetPair struct {
 	score  float64
 	member string
+}
+
+func parseZAddPairs(args [][]byte) ([]zsetPair, resp.Frame) {
+	if len(args) < 2 || len(args)%2 != 0 {
+		return nil, wrongArgs("zadd")
+	}
+	pairs := make([]zsetPair, 0, len(args)/2)
+	for i := 0; i < len(args); i += 2 {
+		score, err := strconv.ParseFloat(string(args[i]), 64)
+		if err != nil || math.IsNaN(score) {
+			return nil, resp.NewError("ERR", "value is not a valid float")
+		}
+		pairs = append(pairs, zsetPair{score: score, member: string(args[i+1])})
+	}
+	return pairs, nil
 }
 
 func (s *Store) zsetAdd(key []byte, pairs []zsetPair) (int, error) {

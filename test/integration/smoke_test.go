@@ -41,7 +41,7 @@ func startServer(t *testing.T, ctx context.Context) string {
 		ReadTimeoutMs:  0,
 		WriteTimeoutMs: 0,
 	}
-	eng := engine.New(config.EngineConfig{StripeCount: 16, EvictionPolicy: "noop"})
+	eng := engine.New(config.EngineConfig{StripeCount: 16, EvictionPolicy: "noeviction"})
 	srv := server.New(cfg, eng, metrics.NewNoop())
 
 	go func() { _ = srv.Start(ctx) }()

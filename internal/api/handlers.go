@@ -15,11 +15,17 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleEngineState(w http.ResponseWriter, r *http.Request) {
 	mem := s.engine.Memory()
 	policy := s.engine.Eviction().Policy().Name()
+	var rejected uint64
+	if s.metrics != nil {
+		rejected = s.metrics.Counter("eviction.rejected_writes")
+	}
 	writeJSON(w, http.StatusOK, EngineStateResponse{
 		UsedBytes:      mem.Used(),
 		MemoryLimit:    mem.Limit(),
+		AvailableBytes: mem.Available(),
 		UsageRatio:     mem.UsageRatio(),
 		EvictionPolicy: policy,
+		RejectedWrites: rejected,
 	})
 }
 

@@ -28,7 +28,7 @@ func newClusterConfig() config.ClusterConfig {
 func TestManagerStartShutdown(t *testing.T) {
 	cfg := newClusterConfig()
 	m := cluster.NewManagerWithNode(cfg, "node-1")
-	eng := engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noop"})
+	eng := engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noeviction"})
 	m.AttachEngine(eng)
 
 	ctx, cancel := context.WithCancel(context.Background())

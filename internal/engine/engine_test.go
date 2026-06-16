@@ -11,7 +11,7 @@ import (
 )
 
 func newTestEngine() *Engine {
-	return New(config.EngineConfig{StripeCount: 16, EvictionPolicy: "noop"})
+	return New(config.EngineConfig{StripeCount: 16, EvictionPolicy: "noeviction"})
 }
 
 func exec(t *testing.T, e *Engine, name string, args ...string) resp.Frame {

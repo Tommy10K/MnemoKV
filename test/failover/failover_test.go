@@ -69,7 +69,7 @@ func TestFailoverPromotesNewLeader(t *testing.T) {
 
 func TestWriteHookRejectsWhenNotLeader(t *testing.T) {
 	m := makeManager("node-1")
-	eng := engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noop"})
+	eng := engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noeviction"})
 	m.AttachEngine(eng)
 
 	cp := m.ControlPlane()
@@ -102,7 +102,7 @@ func TestElectionMonitorTriggersFailover(t *testing.T) {
 		},
 	}
 	m := cluster.NewManagerWithNode(cfg, "node-1")
-	eng := engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noop"})
+	eng := engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noeviction"})
 	m.AttachEngine(eng)
 
 	cp := m.ControlPlane()

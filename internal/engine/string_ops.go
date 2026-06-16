@@ -17,60 +17,69 @@ func (x *Executor) cmdSet(cmd *resp.Command) resp.Frame {
 	key := cmd.Args[0]
 	value := cmd.Args[1]
 
-	var (
-		expiresAtNs   int64
-		hasExpiration bool
-		condition     = setAlways
-	)
+	opts, frame := parseSetOptions(cmd.Args[2:])
+	if frame != nil {
+		return frame
+	}
+	if !x.store.setString(key, value, opts.expiresAtNs, opts.condition) {
+		return resp.NullBulk
+	}
+	return resp.OK
+}
 
-	for i := 2; i < len(cmd.Args); i++ {
-		switch upperASCII(cmd.Args[i]) {
+type setOptions struct {
+	expiresAtNs int64
+	condition   setCondition
+}
+
+func parseSetOptions(args [][]byte) (setOptions, resp.Frame) {
+	opts := setOptions{condition: setAlways}
+	hasExpiration := false
+	for i := 0; i < len(args); i++ {
+		switch upperASCII(args[i]) {
 		case "EX":
-			if hasExpiration || i+1 >= len(cmd.Args) {
-				return resp.NewError("ERR", "syntax error")
+			if hasExpiration || i+1 >= len(args) {
+				return opts, resp.NewError("ERR", "syntax error")
 			}
-			secs, ok := parseInt64(cmd.Args[i+1])
+			secs, ok := parseInt64(args[i+1])
 			if !ok {
-				return resp.NewError("ERR", "value is not an integer or out of range")
+				return opts, resp.NewError("ERR", "value is not an integer or out of range")
 			}
-			expiresAtNs, ok = expirationFromNow(secs, int64(1_000_000_000))
+			opts.expiresAtNs, ok = expirationFromNow(secs, int64(1_000_000_000))
 			if !ok {
-				return resp.NewError("ERR", "invalid expire time in 'set' command")
+				return opts, resp.NewError("ERR", "invalid expire time in 'set' command")
 			}
 			hasExpiration = true
 			i++
 		case "PX":
-			if hasExpiration || i+1 >= len(cmd.Args) {
-				return resp.NewError("ERR", "syntax error")
+			if hasExpiration || i+1 >= len(args) {
+				return opts, resp.NewError("ERR", "syntax error")
 			}
-			ms, ok := parseInt64(cmd.Args[i+1])
+			ms, ok := parseInt64(args[i+1])
 			if !ok {
-				return resp.NewError("ERR", "value is not an integer or out of range")
+				return opts, resp.NewError("ERR", "value is not an integer or out of range")
 			}
-			expiresAtNs, ok = expirationFromNow(ms, int64(1_000_000))
+			opts.expiresAtNs, ok = expirationFromNow(ms, int64(1_000_000))
 			if !ok {
-				return resp.NewError("ERR", "invalid expire time in 'set' command")
+				return opts, resp.NewError("ERR", "invalid expire time in 'set' command")
 			}
 			hasExpiration = true
 			i++
 		case "NX":
-			if condition == setIfPresent {
-				return resp.NewError("ERR", "syntax error")
+			if opts.condition == setIfPresent {
+				return opts, resp.NewError("ERR", "syntax error")
 			}
-			condition = setIfMissing
+			opts.condition = setIfMissing
 		case "XX":
-			if condition == setIfMissing {
-				return resp.NewError("ERR", "syntax error")
+			if opts.condition == setIfMissing {
+				return opts, resp.NewError("ERR", "syntax error")
 			}
-			condition = setIfPresent
+			opts.condition = setIfPresent
 		default:
-			return resp.NewError("ERR", "syntax error")
+			return opts, resp.NewError("ERR", "syntax error")
 		}
 	}
-	if !x.store.setString(key, value, expiresAtNs, condition) {
-		return resp.NullBulk
-	}
-	return resp.OK
+	return opts, nil
 }
 
 func (x *Executor) cmdGet(cmd *resp.Command) resp.Frame {

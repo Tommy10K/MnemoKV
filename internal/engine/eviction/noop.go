@@ -1,7 +1,7 @@
 package eviction
 
-type Noop struct{}
+type NoEviction struct{}
 
-func (Noop) Name() string { return "noop" }
+func (NoEviction) Name() string { return "noeviction" }
 
-func (Noop) PickVictims(_ uint64, _ []Candidate) []Candidate { return nil }
+func (NoEviction) PickVictims(_ uint64, _ []Candidate) []Candidate { return nil }

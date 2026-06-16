@@ -17,11 +17,11 @@ type evictionPolicyResponse struct {
 }
 
 var validPolicies = map[string]struct{}{
-	"noop":   {},
-	"fifo":   {},
-	"lru":    {},
-	"lfu":    {},
-	"random": {},
+	"noeviction": {},
+	"fifo":        {},
+	"lru":         {},
+	"lfu":         {},
+	"random":      {},
 }
 
 func (s *Server) handleEvictionPolicy(w http.ResponseWriter, r *http.Request) {

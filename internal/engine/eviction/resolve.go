@@ -10,7 +10,9 @@ func PolicyByName(name string) Policy {
 		return LRU{}
 	case "lfu":
 		return LFU{}
+	case "noeviction":
+		return NoEviction{}
 	default:
-		return Noop{}
+		return NoEviction{}
 	}
 }

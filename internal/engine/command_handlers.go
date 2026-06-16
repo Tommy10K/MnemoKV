@@ -82,7 +82,7 @@ func (x *Executor) cmdTTL(cmd *resp.Command) resp.Frame {
 	if len(cmd.Args) != 1 {
 		return wrongArgs("ttl")
 	}
-	e, ok := x.store.Get(cmd.Args[0])
+	e, ok := x.store.Peek(cmd.Args[0])
 	if !ok {
 		return resp.Integer(-2)
 	}

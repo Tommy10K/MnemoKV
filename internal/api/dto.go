@@ -9,8 +9,10 @@ type HealthResponse struct {
 type EngineStateResponse struct {
 	UsedBytes      uint64  `json:"usedBytes"`
 	MemoryLimit    uint64  `json:"memoryLimit"`
+	AvailableBytes uint64  `json:"availableBytes"`
 	UsageRatio     float64 `json:"usageRatio"`
 	EvictionPolicy string  `json:"evictionPolicy"`
+	RejectedWrites uint64  `json:"rejectedWrites"`
 }
 
 type MetricsSummary struct {

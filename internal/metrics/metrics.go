@@ -11,6 +11,7 @@ import "time"
 // or in-memory backend can be swapped in transparently.
 type Sink interface {
 	IncCounter(name string, labels ...string)
+	AddCounter(name string, delta uint64, labels ...string)
 	ObserveLatency(name string, value time.Duration, labels ...string)
 	Gauge(name string, value float64, labels ...string)
 }
@@ -23,6 +24,8 @@ type Noop struct{}
 func NewNoop() Noop { return Noop{} }
 
 func (Noop) IncCounter(string, ...string) {}
+
+func (Noop) AddCounter(string, uint64, ...string) {}
 
 func (Noop) ObserveLatency(string, time.Duration, ...string) {}
 

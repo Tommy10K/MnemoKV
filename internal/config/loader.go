@@ -65,7 +65,7 @@ func (c *Config) applyFallbacks() {
 		c.Engine.StripeCount = 32
 	}
 	if c.Engine.EvictionPolicy == "" {
-		c.Engine.EvictionPolicy = "noop"
+		c.Engine.EvictionPolicy = "noeviction"
 	}
 	if c.Cluster.WriteSafetyMode == "" {
 		c.Cluster.WriteSafetyMode = "async"
