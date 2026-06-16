@@ -14,7 +14,7 @@ import {
 import { downloadFile } from "@/lib/download"
 import { useAppStore } from "@/store/appStore"
 
-const evictionPolicies: EvictionPolicy[] = ["noop", "fifo", "lru", "lfu", "random"]
+const evictionPolicies: EvictionPolicy[] = ["noeviction", "fifo", "lru", "lfu", "random"]
 const writeModes: WriteSafety[] = ["async", "strong"]
 
 export function ConfigPage() {

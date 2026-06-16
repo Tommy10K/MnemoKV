@@ -1,5 +1,5 @@
 export type Mode = "standalone" | "clustered"
-export type EvictionPolicy = "noop" | "fifo" | "lru" | "lfu" | "random"
+export type EvictionPolicy = "noeviction" | "fifo" | "lru" | "lfu" | "random"
 export type WriteSafety = "async" | "strong"
 
 export type Peer = {

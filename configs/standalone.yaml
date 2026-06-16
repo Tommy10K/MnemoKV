@@ -13,7 +13,7 @@ network:
 engine:
   stripeCount: 32
   memoryLimitBytes: 0          # 0 disables eviction
-  evictionPolicy: lru          # noop | fifo | lru | lfu | random
+  evictionPolicy: lru          # noeviction | fifo | lru | lfu | random
 
 cluster:
   enabled: false

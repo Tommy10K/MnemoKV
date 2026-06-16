@@ -7,8 +7,10 @@ export type HealthResponse = {
 export type EngineStateResponse = {
   usedBytes: number
   memoryLimit: number
+  availableBytes: number
   usageRatio: number
   evictionPolicy: string
+  rejectedWrites: number
 }
 
 export type MetricsSummary = {
@@ -35,7 +37,9 @@ export type NodeEvent = {
   timestamp: number
   usedBytes: number
   memoryLimit: number
+  availableBytes: number
   policy: string
+  rejectedWrites?: number
   counters?: Record<string, number>
 }
 
