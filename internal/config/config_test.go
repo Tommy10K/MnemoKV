@@ -17,6 +17,30 @@ func TestLoadStandalone(t *testing.T) {
 	if cfg.Network.Port == 0 {
 		t.Fatalf("port not loaded")
 	}
+	if cfg.Persistence.DataDir != cfg.Node.DataDir || cfg.Persistence.Format != "json" {
+		t.Fatalf("unexpected persistence defaults: %+v", cfg.Persistence)
+	}
+}
+
+func TestValidatePersistence(t *testing.T) {
+	base := Config{
+		Node:        NodeConfig{ID: "n", DataDir: "./data"},
+		Network:     NetworkConfig{Port: 6380, MaxConnections: 10},
+		Engine:      EngineConfig{StripeCount: 8, EvictionPolicy: "lru"},
+		Cluster:     ClusterConfig{WriteSafetyMode: "async"},
+		Persistence: PersistenceConfig{Enabled: true, DataDir: "./data", SnapshotIntervalSec: 1, MaxSnapshots: 1, Format: "BINARY"},
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("validate persistence: %v", err)
+	}
+	if base.Persistence.Format != "binary" {
+		t.Fatalf("format = %q, want binary", base.Persistence.Format)
+	}
+
+	base.Persistence.Format = "yaml"
+	if err := base.Validate(); err == nil {
+		t.Fatal("expected unsupported persistence format to fail")
+	}
 }
 
 func TestLoadCluster(t *testing.T) {

@@ -7,11 +7,13 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mnemokv/mnemokv/internal/cluster"
 	"github.com/mnemokv/mnemokv/internal/config"
 	"github.com/mnemokv/mnemokv/internal/engine"
 	"github.com/mnemokv/mnemokv/internal/metrics"
+	"github.com/mnemokv/mnemokv/internal/persistence"
 )
 
 func newTestServer() *Server {
@@ -25,7 +27,7 @@ func newTestServer() *Server {
 		config.ObservabilityConfig{},
 		config.NodeConfig{ID: "test", Mode: "standalone"},
 		config.ClusterConfig{},
-		eng, sink, cluMgr,
+		eng, sink, cluMgr, nil,
 	)
 }
 
@@ -171,6 +173,7 @@ func TestPostHandlersRejectWrongMethods(t *testing.T) {
 	}{
 		{"/commands", s.handleCommands},
 		{"/engine/eviction-policy", s.handleEvictionPolicy},
+		{"/admin/snapshot", s.handleSnapshot},
 	}
 	for _, tc := range cases {
 		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
@@ -182,6 +185,33 @@ func TestPostHandlersRejectWrongMethods(t *testing.T) {
 		if allow := rr.Header().Get("Allow"); allow != http.MethodPost {
 			t.Fatalf("%s: Allow=%q, want POST", tc.path, allow)
 		}
+	}
+}
+
+type fakeSnapshotter struct {
+	result persistence.Result
+	err    error
+}
+
+func (f fakeSnapshotter) Snapshot() (persistence.Result, error) { return f.result, f.err }
+
+func TestManualSnapshot(t *testing.T) {
+	s := newTestServer()
+	s.snapshots = fakeSnapshotter{result: persistence.Result{
+		Path: "snapshot.json", Format: "json", CreatedAt: time.Unix(1, 0).UTC(), EntryCount: 2, Checksum: "abc",
+	}}
+	req := httptest.NewRequest(http.MethodPost, "/admin/snapshot", nil)
+	rr := httptest.NewRecorder()
+	s.handleSnapshot(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status = %d body=%s", rr.Code, rr.Body.String())
+	}
+	var result persistence.Result
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.EntryCount != 2 || result.Format != "json" {
+		t.Fatalf("unexpected result: %+v", result)
 	}
 }
 

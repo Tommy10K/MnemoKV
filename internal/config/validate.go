@@ -22,6 +22,11 @@ var validWriteSafetyModes = map[string]struct{}{
 	"strong": {},
 }
 
+var validSnapshotFormats = map[string]struct{}{
+	"json":   {},
+	"binary": {},
+}
+
 // Validate enforces the cross-field invariants documented in
 // docs/adr/001-system-modes.md. It returns a single error describing the first
 // rule that was violated; configuration must be entirely valid before the node
@@ -56,6 +61,26 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("engine.evictionPolicy %q is not supported", c.Engine.EvictionPolicy)
 	}
 	c.Engine.EvictionPolicy = policy
+
+	snapshotFormat := strings.ToLower(c.Persistence.Format)
+	if snapshotFormat == "" {
+		snapshotFormat = "json"
+	}
+	if _, ok := validSnapshotFormats[snapshotFormat]; !ok {
+		return fmt.Errorf("persistence.format %q is not supported", c.Persistence.Format)
+	}
+	c.Persistence.Format = snapshotFormat
+	if c.Persistence.Enabled {
+		if strings.TrimSpace(c.Persistence.DataDir) == "" {
+			return fmt.Errorf("persistence.dataDir must not be empty when persistence is enabled")
+		}
+		if c.Persistence.SnapshotIntervalSec <= 0 {
+			return fmt.Errorf("persistence.snapshotIntervalSec must be positive when persistence is enabled")
+		}
+		if c.Persistence.MaxSnapshots <= 0 {
+			return fmt.Errorf("persistence.maxSnapshots must be positive when persistence is enabled")
+		}
+	}
 
 	mode := strings.ToLower(c.Cluster.WriteSafetyMode)
 	if _, ok := validWriteSafetyModes[mode]; !ok {

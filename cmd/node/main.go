@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/mnemokv/mnemokv/internal/engine"
 	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
+	"github.com/mnemokv/mnemokv/internal/persistence"
 	"github.com/mnemokv/mnemokv/internal/server"
 )
 
@@ -36,8 +38,20 @@ func main() {
 	eng := engine.NewWithMetrics(cfg.Engine, sink)
 	clusterMgr := cluster.NewManagerWithNode(cfg.Cluster, cfg.Node.ID)
 	clusterMgr.AttachEngine(eng)
+	snapshotMgr := persistence.New(cfg.Persistence, cfg.Node.ID, eng, clusterMgr.SnapshotMetadata)
+	if cfg.Persistence.Enabled && cfg.Persistence.LoadOnStart {
+		restored, restoreErr := snapshotMgr.RestoreLatest()
+		switch {
+		case restoreErr == nil:
+			logging.Infof("persistence: restored %d entries from %s", restored.RestoredEntries, restored.Path)
+		case errors.Is(restoreErr, persistence.ErrNoSnapshot):
+			logging.Infof("persistence: no snapshot found; starting with an empty dataset")
+		default:
+			log.Fatalf("persistence: restore: %v", restoreErr)
+		}
+	}
 	srv := server.New(cfg.Network, eng, sink)
-	apiSrv := api.New(cfg.Observability, cfg.Node, cfg.Cluster, eng, sink, clusterMgr)
+	apiSrv := api.New(cfg.Observability, cfg.Node, cfg.Cluster, eng, sink, clusterMgr, snapshotMgr)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -45,6 +59,7 @@ func main() {
 	if err := clusterMgr.Start(ctx); err != nil {
 		log.Fatalf("cluster: start: %v", err)
 	}
+	snapshotMgr.Start(ctx)
 
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- srv.Start(ctx) }()
@@ -64,6 +79,7 @@ func main() {
 			logging.Errorf("api: exited: %v", err)
 		}
 	}
+	cancel()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
@@ -76,5 +92,6 @@ func main() {
 	if err := clusterMgr.Shutdown(shutdownCtx); err != nil {
 		logging.Warnf("cluster: shutdown: %v", err)
 	}
+	snapshotMgr.Wait()
 	logging.Infof("node: stopped")
 }

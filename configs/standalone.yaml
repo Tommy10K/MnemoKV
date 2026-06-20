@@ -23,6 +23,14 @@ cluster:
   writeSafetyMode: async       # async | strong
   peers: []
 
+persistence:
+  enabled: false
+  dataDir: ./data
+  snapshotIntervalSec: 60
+  maxSnapshots: 5
+  loadOnStart: true
+  format: json                  # json | binary
+
 observability:
   apiBindAddr: 127.0.0.1
   apiPort: 7380

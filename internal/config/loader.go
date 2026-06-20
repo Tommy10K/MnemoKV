@@ -52,6 +52,12 @@ func defaults() *Config {
 		Cluster: ClusterConfig{
 			WriteSafetyMode: "async",
 		},
+		Persistence: PersistenceConfig{
+			SnapshotIntervalSec: 60,
+			MaxSnapshots:        5,
+			LoadOnStart:         true,
+			Format:              "json",
+		},
 		Observability: ObservabilityConfig{
 			APIBindAddr: "127.0.0.1",
 			APIPort:     7380,
@@ -69,6 +75,18 @@ func (c *Config) applyFallbacks() {
 	}
 	if c.Cluster.WriteSafetyMode == "" {
 		c.Cluster.WriteSafetyMode = "async"
+	}
+	if c.Persistence.DataDir == "" {
+		c.Persistence.DataDir = c.Node.DataDir
+	}
+	if c.Persistence.SnapshotIntervalSec == 0 {
+		c.Persistence.SnapshotIntervalSec = 60
+	}
+	if c.Persistence.MaxSnapshots == 0 {
+		c.Persistence.MaxSnapshots = 5
+	}
+	if c.Persistence.Format == "" {
+		c.Persistence.Format = "json"
 	}
 	if c.Observability.LogLevel == "" {
 		c.Observability.LogLevel = "info"

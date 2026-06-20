@@ -12,27 +12,34 @@ import (
 	"github.com/mnemokv/mnemokv/internal/engine"
 	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
+	"github.com/mnemokv/mnemokv/internal/persistence"
 )
 
+type Snapshotter interface {
+	Snapshot() (persistence.Result, error)
+}
+
 type Server struct {
-	cfg     config.ObservabilityConfig
-	node    config.NodeConfig
-	cluster config.ClusterConfig
-	engine  *engine.Engine
-	metrics *metrics.InMemory
-	cluMgr  *cluster.Manager
+	cfg       config.ObservabilityConfig
+	node      config.NodeConfig
+	cluster   config.ClusterConfig
+	engine    *engine.Engine
+	metrics   *metrics.InMemory
+	cluMgr    *cluster.Manager
+	snapshots Snapshotter
 
 	httpSrv *http.Server
 }
 
-func New(cfg config.ObservabilityConfig, node config.NodeConfig, clusterCfg config.ClusterConfig, eng *engine.Engine, sink *metrics.InMemory, cluMgr *cluster.Manager) *Server {
+func New(cfg config.ObservabilityConfig, node config.NodeConfig, clusterCfg config.ClusterConfig, eng *engine.Engine, sink *metrics.InMemory, cluMgr *cluster.Manager, snapshots Snapshotter) *Server {
 	return &Server{
-		cfg:     cfg,
-		node:    node,
-		cluster: clusterCfg,
-		engine:  eng,
-		metrics: sink,
-		cluMgr:  cluMgr,
+		cfg:       cfg,
+		node:      node,
+		cluster:   clusterCfg,
+		engine:    eng,
+		metrics:   sink,
+		cluMgr:    cluMgr,
+		snapshots: snapshots,
 	}
 }
 

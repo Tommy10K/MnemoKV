@@ -12,6 +12,7 @@ type Config struct {
 	Network       NetworkConfig       `yaml:"network"`
 	Engine        EngineConfig        `yaml:"engine"`
 	Cluster       ClusterConfig       `yaml:"cluster"`
+	Persistence   PersistenceConfig   `yaml:"persistence"`
 	Observability ObservabilityConfig `yaml:"observability"`
 }
 
@@ -42,12 +43,23 @@ type EngineConfig struct {
 // The baseline milestone accepts these fields but only exercises them once
 // the cluster phases land.
 type ClusterConfig struct {
+	ID                 string       `yaml:"id"`
 	Enabled            bool         `yaml:"enabled"`
 	ShardingEnabled    bool         `yaml:"shardingEnabled"`
 	ReplicationEnabled bool         `yaml:"replicationEnabled"`
 	AutoFailover       bool         `yaml:"autoFailover"`
 	WriteSafetyMode    string       `yaml:"writeSafetyMode"`
 	Peers              []PeerConfig `yaml:"peers"`
+}
+
+// PersistenceConfig governs periodic and manual engine snapshots.
+type PersistenceConfig struct {
+	Enabled             bool   `yaml:"enabled"`
+	DataDir             string `yaml:"dataDir"`
+	SnapshotIntervalSec int    `yaml:"snapshotIntervalSec"`
+	MaxSnapshots        int    `yaml:"maxSnapshots"`
+	LoadOnStart         bool   `yaml:"loadOnStart"`
+	Format              string `yaml:"format"`
 }
 
 // PeerConfig identifies one peer in a static cluster definition.

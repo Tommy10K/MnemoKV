@@ -16,6 +16,7 @@ engine:
   evictionPolicy: lru
 
 cluster:
+  id: demo-cluster
   enabled: true
   shardingEnabled: true
   replicationEnabled: true
@@ -28,6 +29,14 @@ cluster:
       address: 127.0.0.1:6382
     - id: node-3
       address: 127.0.0.1:6383
+
+persistence:
+  enabled: false
+  dataDir: ./data/node-3
+  snapshotIntervalSec: 60
+  maxSnapshots: 5
+  loadOnStart: true
+  format: json                  # json | binary
 
 observability:
   apiBindAddr: 127.0.0.1

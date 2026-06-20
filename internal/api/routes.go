@@ -10,4 +10,5 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/events", s.handleEvents)
 	mux.HandleFunc("/commands", s.handleCommands)
 	mux.HandleFunc("/engine/eviction-policy", s.handleEvictionPolicy)
+	mux.HandleFunc("/admin/snapshot", s.handleSnapshot)
 }
