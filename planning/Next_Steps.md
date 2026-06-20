@@ -162,11 +162,11 @@ Snapshot rules:
 Single-node mode is already the reliable MnemoKV lab. Remaining work is primarily operational and
 demo hardening rather than architectural repair.
 
-- [ ] Add a repeatable end-to-end demo script for strings, TTL, lists, sorted sets, workloads, metrics, and malformed commands.
-- [ ] Add a low-memory standalone preset demonstrating both `noeviction` rejection and one active eviction policy.
-- [ ] Add a standalone persistence preset demonstrating JSON and binary snapshot restore.
-- [ ] Add HTTP/API smoke coverage for invalid methods, oversized bodies, trailing JSON, and unavailable backends.
-- [ ] Update the root `README.md` to match the current standalone startup and frontend workflow.
+- [x] Add a repeatable end-to-end demo script for strings, TTL, lists, sorted sets, workloads, metrics, and malformed commands.
+- [x] Add a low-memory standalone preset demonstrating both `noeviction` rejection and one active eviction policy.
+- [x] Add a standalone persistence preset demonstrating JSON and binary snapshot restore.
+- [x] Add HTTP/API smoke coverage for invalid methods, oversized bodies, trailing JSON, and unavailable backends.
+- [x] Update the root `README.md` to match the current standalone startup and frontend workflow.
 
 ### Cluster
 

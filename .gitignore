@@ -12,6 +12,7 @@ planning/
 bin/
 dist/
 results/
+data/
 
 # Go test and coverage
 *.test

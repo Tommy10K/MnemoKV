@@ -1,0 +1,37 @@
+node:
+  id: standalone-low-memory
+  mode: standalone
+  dataDir: ./data/standalone-low-memory
+
+network:
+  bindAddr: 127.0.0.1
+  port: 6380
+  maxConnections: 128
+  readTimeoutMs: 30000
+  writeTimeoutMs: 30000
+
+engine:
+  stripeCount: 8
+  memoryLimitBytes: 512
+  evictionPolicy: noeviction
+
+cluster:
+  enabled: false
+  shardingEnabled: false
+  replicationEnabled: false
+  autoFailover: false
+  writeSafetyMode: async
+  peers: []
+
+persistence:
+  enabled: false
+  dataDir: ./data/standalone-low-memory
+  snapshotIntervalSec: 60
+  maxSnapshots: 5
+  loadOnStart: true
+  format: json
+
+observability:
+  apiBindAddr: 127.0.0.1
+  apiPort: 7380
+  logLevel: info

@@ -22,6 +22,39 @@ func TestLoadStandalone(t *testing.T) {
 	}
 }
 
+func TestLoadStandalonePresets(t *testing.T) {
+	tests := []struct {
+		name              string
+		file              string
+		memoryLimit       uint64
+		persistenceFormat string
+	}{
+		{name: "low memory", file: "standalone-low-memory.yaml", memoryLimit: 512},
+		{name: "JSON persistence", file: "standalone-persistence-json.yaml", persistenceFormat: "json"},
+		{name: "binary persistence", file: "standalone-persistence-binary.yaml", persistenceFormat: "binary"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := Load(filepath.Join("..", "..", "configs", tc.file))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !cfg.IsStandalone() || cfg.Engine.MemoryLimitBytes != tc.memoryLimit {
+				t.Fatalf("unexpected preset: %+v", cfg)
+			}
+			if tc.persistenceFormat == "" {
+				if cfg.Persistence.Enabled {
+					t.Fatal("low-memory preset unexpectedly enables persistence")
+				}
+				return
+			}
+			if !cfg.Persistence.Enabled || cfg.Persistence.Format != tc.persistenceFormat || !cfg.Persistence.LoadOnStart {
+				t.Fatalf("unexpected persistence preset: %+v", cfg.Persistence)
+			}
+		})
+	}
+}
+
 func TestValidatePersistence(t *testing.T) {
 	base := Config{
 		Node:        NodeConfig{ID: "n", DataDir: "./data"},
