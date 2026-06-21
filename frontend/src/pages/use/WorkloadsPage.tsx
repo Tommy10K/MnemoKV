@@ -88,6 +88,7 @@ export function WorkloadsPage() {
             key={p.id}
             type="button"
             onClick={() => setProfileId(p.id)}
+            aria-pressed={p.id === profileId}
             className={[
               "rounded-lg border p-4 text-left transition-colors",
               p.id === profileId
@@ -97,7 +98,7 @@ export function WorkloadsPage() {
           >
             <div className="text-sm font-semibold text-white">{p.label}</div>
             <div className="mt-1 text-xs text-[#9ca3af]">{p.summary}</div>
-            <ul className="mt-2 space-y-0.5 text-xs text-[#6b7280]">
+            <ul className="mt-2 space-y-0.5 text-xs text-[#8b949e]">
               {p.mix.map((m) => (
                 <li key={m} className="font-mono">
                   {m}
@@ -133,6 +134,7 @@ export function WorkloadsPage() {
           <button
             type="button"
             onClick={copy}
+            aria-live="polite"
             className="rounded-md bg-emerald-500/20 px-3 py-1 text-sm text-emerald-300 hover:bg-emerald-500/30"
           >
             {copied ? "copied" : "copy"}
@@ -141,7 +143,7 @@ export function WorkloadsPage() {
         <pre className="overflow-x-auto rounded bg-[#0d1117] p-3 font-mono text-xs text-[#e6edf3]">
           {command}
         </pre>
-        <p className="mt-3 text-xs text-[#6b7280]">
+        <p className="mt-3 text-xs text-[#8b949e]">
           The workload generator opens its own RESP connections to{" "}
           <span className="font-mono">{addr}</span>. Start a node first with{" "}
           <span className="font-mono">go run ./cmd/node -config configs/standalone.yaml</span>.
@@ -153,7 +155,7 @@ export function WorkloadsPage() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="flex flex-col gap-1 text-xs uppercase tracking-wide text-[#6b7280]">
+    <label className="flex flex-col gap-1 text-xs uppercase tracking-wide text-[#8b949e]">
       {label}
       {children}
     </label>

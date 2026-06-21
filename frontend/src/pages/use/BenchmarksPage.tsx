@@ -20,6 +20,7 @@ export function BenchmarksPage() {
   const [source, setSource] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
   const [metric, setMetric] = useState<Metric>("nsPerOp")
+  const [loadingExample, setLoadingExample] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   function load(raw: string, label: string) {
@@ -42,6 +43,20 @@ export function BenchmarksPage() {
     const file = e.target.files?.[0]
     if (!file) return
     file.text().then((text) => load(text, file.name))
+  }
+
+  async function loadExample() {
+    setLoadingExample(true)
+    setError(null)
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL}examples/engine-bench.txt`)
+      if (!response.ok) throw new Error(`example returned ${response.status}`)
+      load(await response.text(), "built-in example")
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setLoadingExample(false)
+    }
   }
 
   const families = useMemo(() => groupByFamily(rows), [rows])
@@ -73,9 +88,18 @@ export function BenchmarksPage() {
             type="file"
             accept=".json,.txt,.log,application/json,text/plain"
             onChange={onFile}
+            aria-label="Benchmark result file"
             className="hidden"
           />
-          <span className="text-xs text-[#6b7280]">
+          <button
+            type="button"
+            onClick={loadExample}
+            disabled={loadingExample}
+            className="rounded-md border border-[#1f2937] px-3 py-1.5 text-sm text-[#d1d5db] hover:border-emerald-500/50 hover:text-white disabled:opacity-50"
+          >
+            {loadingExample ? "Loading…" : "Load built-in example"}
+          </button>
+          <span className="text-xs text-[#8b949e]">
             Accepts the raw text output or a JSON array; both work.
           </span>
           {source ? (
@@ -105,6 +129,7 @@ export function BenchmarksPage() {
                 key={m.id}
                 type="button"
                 onClick={() => setMetric(m.id)}
+                aria-pressed={metric === m.id}
                 className={[
                   "rounded-md border px-3 py-1.5 text-sm transition-colors",
                   metric === m.id
@@ -115,14 +140,14 @@ export function BenchmarksPage() {
                 {m.label}
               </button>
             ))}
-            <span className="ml-2 text-xs text-[#6b7280]">
+            <span className="ml-2 text-xs text-[#8b949e]">
               showing {activeMetric.label} for {rows.length} benchmark{rows.length === 1 ? "" : "s"}
             </span>
           </section>
 
           <section className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4">
             <h2 className="mb-3 text-sm text-[#9ca3af]">All benchmarks</h2>
-            <BarChart data={allBars} format={activeMetric.format} yLabel={activeMetric.unit} />
+            <BarChart ariaLabel={`All benchmarks by ${activeMetric.label}`} data={allBars} format={activeMetric.format} yLabel={activeMetric.unit} />
             <Legend />
           </section>
 
@@ -134,13 +159,14 @@ export function BenchmarksPage() {
               >
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-white capitalize">{family}</h3>
-                  <span className="text-xs text-[#6b7280]">{famRows.length} benchmark(s)</span>
+                  <span className="text-xs text-[#8b949e]">{famRows.length} benchmark(s)</span>
                 </div>
                 {familyNotes[family] ? (
                   <p className="mb-2 text-xs text-[#9ca3af]">{familyNotes[family]}</p>
                 ) : null}
                 <BarChart
                   data={rowsToBars(famRows, metric)}
+                  ariaLabel={`${family} benchmarks by ${activeMetric.label}`}
                   format={activeMetric.format}
                   height={220}
                 />
@@ -158,6 +184,7 @@ function PasteBox({ onLoad }: { onLoad: (text: string) => void }) {
   return (
     <div className="mt-2 flex flex-col gap-2">
       <textarea
+        aria-label="Benchmark output"
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={6}
@@ -169,6 +196,7 @@ function PasteBox({ onLoad }: { onLoad: (text: string) => void }) {
         type="button"
         onClick={() => onLoad(text)}
         disabled={text.trim() === ""}
+        aria-label="Parse pasted benchmark output"
         className="self-start rounded-md bg-emerald-500/20 px-3 py-1 text-sm text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
       >
         Parse
@@ -186,8 +214,8 @@ function EmptyState() {
         ./scripts/benchmark.sh
       </pre>
       <p className="mt-2">
-        Then load <span className="font-mono">results/engine_bench.txt</span> or paste the output
-        above.
+        Use the built-in example for a quick presentation, or load a fresh{" "}
+        <span className="font-mono">results/engine_bench.txt</span> run.
       </p>
     </div>
   )

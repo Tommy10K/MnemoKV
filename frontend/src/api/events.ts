@@ -1,9 +1,11 @@
 import type { NodeEvent } from "./types"
+import { parseNodeEvent } from "./validate"
 
 export type EventsHandlers = {
   onEvent: (e: NodeEvent) => void
   onOpen?: () => void
   onError?: () => void
+  onInvalid?: (error: Error) => void
 }
 
 // connectEvents opens an SSE connection to /events on the given base URL and
@@ -17,10 +19,9 @@ export function connectEvents(baseUrl: string, handlers: EventsHandlers): () => 
   src.onerror = () => handlers.onError?.()
   src.onmessage = (msg) => {
     try {
-      const parsed = JSON.parse(msg.data) as NodeEvent
-      handlers.onEvent(parsed)
-    } catch {
-      // ignore malformed payload
+      handlers.onEvent(parseNodeEvent(JSON.parse(msg.data)))
+    } catch (error) {
+      handlers.onInvalid?.(error instanceof Error ? error : new Error(String(error)))
     }
   }
   return () => src.close()

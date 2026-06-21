@@ -19,6 +19,7 @@ export function useNodeEvents() {
   const baseUrl = useAppStore((s) => s.apiBaseUrl)
   const [status, setStatus] = useState<ConnectionStatus>("connecting")
   const [latest, setLatest] = useState<NodeEvent | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [memory, setMemory] = useState<MemoryPoint[]>([])
   const [throughput, setThroughput] = useState<ThroughputPoint[]>([])
   const prevRef = useRef<{ ts: number; total: number } | null>(null)
@@ -38,13 +39,19 @@ export function useNodeEvents() {
         setMemory([])
         setThroughput([])
         setLatest(null)
+        setError(null)
         resetStaleTimer()
       },
       onError: () => {
         setStatus("disconnected")
       },
+      onInvalid: (cause) => {
+        setStatus("stale")
+        setError(cause.message)
+      },
       onEvent: (event) => {
         setStatus("connected")
+        setError(null)
         resetStaleTimer()
         setLatest(event)
 
@@ -70,7 +77,7 @@ export function useNodeEvents() {
     }
   }, [baseUrl])
 
-  return { status, latest, memory, throughput }
+  return { status, latest, memory, throughput, error }
 }
 
 function appendPoint<T>(points: T[], next: T): T[] {

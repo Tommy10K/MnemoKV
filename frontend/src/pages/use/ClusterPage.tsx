@@ -6,12 +6,12 @@ import { useAppStore } from "@/store/appStore"
 
 export function ClusterPage() {
   const baseUrl = useAppStore((state) => state.apiBaseUrl)
-  const { state, reachable, metadataHistory } = useClusterState()
+  const { state, reachable, metadataHistory, error } = useClusterState()
 
   if (!reachable || state === null) {
     return (
-      <div className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-6 text-sm text-[#9ca3af]">
-        <p className="text-white">Cluster state is not available.</p>
+      <div role={error?.includes("unexpected response") ? "alert" : undefined} className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-6 text-sm text-[#9ca3af]">
+        <p className="text-white">{error?.includes("unexpected response") ? error : "Cluster state is not available."}</p>
         <p className="mt-2">Make sure a node is running and reachable.</p>
       </div>
     )
@@ -80,10 +80,11 @@ function ClusterView({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4">
-          <h2 className="mb-3 text-sm uppercase tracking-wide text-[#6b7280]">Slot assignments</h2>
-          <div className="max-h-80 overflow-auto">
+          <h2 className="mb-3 text-sm uppercase tracking-wide text-[#8b949e]">Slot assignments</h2>
+          <div className="max-h-80 overflow-auto" tabIndex={0} aria-label="Scrollable slot assignments">
             <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-[#6b7280]">
+              <caption className="sr-only">Cluster slot leaders, replicas, terms, and sequences</caption>
+              <thead className="text-xs uppercase tracking-wide text-[#8b949e]">
                 <tr><th className="pb-2">Slot</th><th className="pb-2">Leader</th><th className="pb-2">Replica</th><th className="pb-2">Term / seq</th></tr>
               </thead>
               <tbody className="font-mono text-[#e6edf3]">
@@ -101,17 +102,17 @@ function ClusterView({
         </section>
 
         <section className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4">
-          <h2 className="mb-3 text-sm uppercase tracking-wide text-[#6b7280]">Metadata changes</h2>
-          <p className="mb-3 text-xs text-[#6b7280]">
+          <h2 className="mb-3 text-sm uppercase tracking-wide text-[#8b949e]">Metadata changes</h2>
+          <p className="mb-3 text-xs text-[#8b949e]">
             {state.clusterId} · {state.slotCount} slots · {state.routingMode} routing · {state.failoverMode} failover
           </p>
           {metadataHistory.length === 0 ? (
-            <p className="text-sm text-[#6b7280]">No metadata changes observed.</p>
+            <p className="text-sm text-[#8b949e]">No metadata changes observed.</p>
           ) : (
             <ol className="space-y-2 text-sm">
               {metadataHistory.slice().reverse().map((entry, i) => (
                 <li key={`${entry.at}-${i}`} className="flex items-baseline gap-3">
-                  <span className="text-xs text-[#6b7280]">{new Date(entry.at).toLocaleTimeString()}</span>
+                  <span className="text-xs text-[#8b949e]">{new Date(entry.at).toLocaleTimeString()}</span>
                   <span className="font-mono text-[#e6edf3]">version → {entry.version}</span>
                 </li>
               ))}
@@ -124,7 +125,7 @@ function ClusterView({
 }
 
 function StatCard({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4"><div className="text-xs uppercase tracking-wide text-[#6b7280]">{label}</div><div className="mt-1 text-lg text-white">{children}</div></div>
+  return <div className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4"><div className="text-xs uppercase tracking-wide text-[#8b949e]">{label}</div><div className="mt-1 text-lg text-white">{children}</div></div>
 }
 
 function fillMissing(membership: PeerStatus[], peers: string[], selfId: string): PeerStatus[] {

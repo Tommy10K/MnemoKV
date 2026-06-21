@@ -1,73 +1,46 @@
-# React + TypeScript + Vite
+# MnemoKV Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React/Vite learning, observability, and demonstration UI for MnemoKV.
 
-Currently, two official plugins are available:
+## Run
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Start a backend node from the repository root:
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+go run ./cmd/node -config configs/standalone.yaml
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Then start the frontend:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+cd frontend
+npm.cmd ci
+npm.cmd run dev
 ```
+
+Open the URL printed by Vite. The default API target is `http://127.0.0.1:7380`; it can be changed
+in the Use section and is persisted by the browser. `VITE_API_BASE_URL` sets a different initial
+target.
+
+## Features
+
+- Twelve learning chapters with interactive data-structure and eviction visuals.
+- YAML configuration generator.
+- Live health, engine, metrics, and SSE dashboard.
+- HTTP command console and workload command builder.
+- Fixed-slot cluster topology and slot-state inspection.
+- Runtime eviction-policy controls.
+- Go benchmark import plus a built-in deterministic example.
+- Runtime validation of backend payloads with distinct malformed and offline states.
+- Keyboard, screen-reader, reduced-motion, and responsive-layout support.
+
+## Verify
+
+```powershell
+npm.cmd run lint
+npm.cmd run build
+npm.cmd run test:e2e
+```
+
+The Edge end-to-end suite builds and starts an isolated MnemoKV node and frontend server. It covers
+live and offline flows, malformed API data, accessibility, and laptop, projector, and tablet sizes.

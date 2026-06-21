@@ -11,6 +11,7 @@ export function useClusterState(intervalMs = 1500) {
   const baseUrl = useAppStore((s) => s.apiBaseUrl)
   const [state, setState] = useState<ClusterStateResponse | null>(null)
   const [reachable, setReachable] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [metadataHistory, setMetadataHistory] = useState<MetadataChange[]>([])
   const lastVersionRef = useRef<number | null>(null)
 
@@ -29,6 +30,7 @@ export function useClusterState(intervalMs = 1500) {
           setMetadataHistory([])
         }
         setReachable(true)
+        setError(null)
         setState(data)
         const version = data.metadataVersion ?? 0
         if (lastVersionRef.current === null) {
@@ -38,8 +40,11 @@ export function useClusterState(intervalMs = 1500) {
           lastVersionRef.current = version
           setMetadataHistory((prev) => [...prev, { at: Date.now(), version }].slice(-20))
         }
-      } catch {
-        if (!cancelled) setReachable(false)
+      } catch (cause) {
+        if (!cancelled) {
+          setReachable(false)
+          setError(cause instanceof Error ? cause.message : String(cause))
+        }
       }
     }
 
@@ -52,5 +57,5 @@ export function useClusterState(intervalMs = 1500) {
     }
   }, [baseUrl, intervalMs])
 
-  return { state, reachable, metadataHistory }
+  return { state, reachable, metadataHistory, error }
 }

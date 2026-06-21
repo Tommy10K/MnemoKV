@@ -18,14 +18,14 @@ const stateStyle: Record<string, { bg: string; border: string }> = {
   recovering: { bg: "#1f3a5f", border: "#60a5fa" },
   suspect: { bg: "#3f2d09", border: "#f59e0b" },
   unavailable: { bg: "#3f1d1d", border: "#ef4444" },
-  unknown: { bg: "#1f2937", border: "#6b7280" },
+  unknown: { bg: "#1f2937", border: "#8b949e" },
 }
 
 export function TopologyGraph({ peers, selfId }: Props) {
   const { nodes, edges } = useMemo(() => buildGraph(peers, selfId), [peers, selfId])
 
   return (
-    <div className="h-[420px] rounded-lg border border-[#1f2937] bg-[#0b0f17]">
+    <div role="img" aria-label={`Cluster topology with ${peers.length} nodes`} className="h-[320px] rounded-lg border border-[#1f2937] bg-[#0b0f17] sm:h-[420px]">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -38,6 +38,9 @@ export function TopologyGraph({ peers, selfId }: Props) {
       >
         <Background color="#1f2937" gap={20} />
       </ReactFlow>
+      <span className="sr-only">
+        {peers.map((peer) => `${peer.id}${peer.id === selfId ? " (self)" : ""}: ${peer.state} at ${peer.address}`).join("; ")}
+      </span>
     </div>
   )
 }

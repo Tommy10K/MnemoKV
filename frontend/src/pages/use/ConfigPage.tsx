@@ -80,7 +80,12 @@ export function ConfigPage() {
   const errorByField = new Map(errors.map((e) => [e.field, e.message]))
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_minmax(0,440px)]">
+    <div className="flex flex-col gap-6">
+      <header>
+        <h1 className="text-2xl font-semibold text-white">Configure a node</h1>
+        <p className="text-sm text-[#9ca3af]">Generate a validated standalone or cluster YAML configuration.</p>
+      </header>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_minmax(0,440px)]">
       <form className="flex flex-col gap-6" onSubmit={(e) => e.preventDefault()}>
         <Section title="Node">
           <Field label="Node id" error={errorByField.get("id")}>
@@ -174,22 +179,26 @@ export function ConfigPage() {
                       value={peer.id}
                       onChange={(v) => updatePeer(i, { id: v })}
                       placeholder="id"
+                      ariaLabel={`Peer ${i + 1} node id`}
                     />
                     <TextInput
                       value={peer.address}
                       onChange={(v) => updatePeer(i, { address: v })}
                       placeholder="host:port"
+                      ariaLabel={`Peer ${i + 1} RESP address`}
                     />
                     <TextInput
                       value={peer.apiAddress}
                       onChange={(v) => updatePeer(i, { apiAddress: v })}
                       placeholder="API host:port"
+                      ariaLabel={`Peer ${i + 1} API address`}
                     />
                     <button
                       type="button"
                       onClick={() => removePeer(i)}
                       className="shrink-0 rounded-md border border-[#1f2937] px-2 text-sm text-[#9ca3af] hover:border-red-500/40 hover:text-red-400"
                       title="Remove"
+                      aria-label={`Remove peer ${peer.id || i + 1}`}
                     >
                       ×
                     </button>
@@ -203,7 +212,7 @@ export function ConfigPage() {
 
       <aside className="flex flex-col gap-3 lg:sticky lg:top-6 lg:self-start">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-[#6b7280]">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-[#8b949e]">
             {config.id}.yaml
           </h2>
           <div className="flex gap-2">
@@ -218,7 +227,7 @@ export function ConfigPage() {
               type="button"
               onClick={download}
               disabled={errors.length > 0}
-              className="rounded-md bg-emerald-500/90 px-3 py-1 text-xs font-medium text-black hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-[#1f2937] disabled:text-[#6b7280]"
+              className="rounded-md bg-emerald-500/90 px-3 py-1 text-xs font-medium text-black hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-[#1f2937] disabled:text-[#8b949e]"
             >
               Download
             </button>
@@ -237,7 +246,7 @@ export function ConfigPage() {
           </ul>
         )}
 
-        <p className="text-xs text-[#6b7280]">
+        <p className="text-xs text-[#8b949e]">
           This page only generates a file; it cannot reconfigure a running node. Save it, then run:{" "}
           <code className="mono rounded bg-[#161b22] px-1.5 py-0.5">
             ./bin/mnemokv-node -config {config.id}.yaml
@@ -251,6 +260,7 @@ export function ConfigPage() {
           Open dashboard for {apiUrlFor(config.apiBindAddr, config.apiPort)}
         </Link>
       </aside>
+      </div>
     </div>
   )
 }
@@ -262,7 +272,7 @@ function apiUrlFor(bindAddr: string, port: number): string {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-[#1f2937] bg-[#0b0f17] p-5">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-[#6b7280]">{title}</h3>
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-[#8b949e]">{title}</h2>
       <div className="flex flex-col gap-3">{children}</div>
     </section>
   )
@@ -283,7 +293,7 @@ function Field({
     <label className="flex flex-col gap-1">
       <span className="flex items-baseline justify-between">
         <span className="text-sm font-medium text-[#e6edf3]">{label}</span>
-        {hint && <span className="text-xs text-[#6b7280]">{hint}</span>}
+        {hint && <span className="text-xs text-[#8b949e]">{hint}</span>}
       </span>
       {children}
       {error && <span className="text-xs text-red-400">{error}</span>}
@@ -298,16 +308,19 @@ function TextInput({
   value,
   onChange,
   placeholder,
+  ariaLabel,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder?: string
+  ariaLabel?: string
 }) {
   return (
     <input
       type="text"
       value={value}
       placeholder={placeholder}
+      aria-label={ariaLabel}
       onChange={(e) => onChange(e.target.value)}
       className={inputClass}
     />
@@ -341,6 +354,7 @@ function Segmented<T extends string>({
           key={opt}
           type="button"
           onClick={() => onChange(opt)}
+          aria-pressed={value === opt}
           className={[
             "rounded px-2.5 py-1 text-xs transition-colors",
             value === opt

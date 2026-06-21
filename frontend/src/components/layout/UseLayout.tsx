@@ -16,13 +16,13 @@ const tabs = [
 export function UseLayout() {
   const apiBaseUrl = useAppStore((state) => state.apiBaseUrl)
   const setApiBaseUrl = useAppStore((state) => state.setApiBaseUrl)
-  const health = useNodeStatus()
+  const { health, error: healthError } = useNodeStatus()
 
   return (
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-3 rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="text-xs uppercase tracking-wide text-[#6b7280]">API target</div>
+          <div className="text-xs uppercase tracking-wide text-[#8b949e]">API target</div>
           <div className="mt-1 text-sm text-[#9ca3af]">
             {health ? (
               <>
@@ -30,14 +30,18 @@ export function UseLayout() {
                 <span className="text-emerald-300">({health.mode})</span>
               </>
             ) : (
-              <span className="text-amber-300">No node is responding at the selected address.</span>
+              <span className="text-amber-300">
+                {healthError?.includes("unexpected response")
+                  ? healthError
+                  : "No node is responding at the selected address."}
+              </span>
             )}
           </div>
         </div>
         <ApiTargetForm key={apiBaseUrl} value={apiBaseUrl} onApply={setApiBaseUrl} />
       </section>
 
-      <nav className="flex flex-wrap gap-1 border-b border-[#1f2937] pb-2">
+      <nav aria-label="Database tools" className="flex flex-wrap gap-1 border-b border-[#1f2937] pb-2">
         {tabs.map((tab) => (
           <NavLink
             key={tab.to}
@@ -97,6 +101,7 @@ function ApiTargetForm({ value, onApply }: { value: string; onApply: (url: strin
           value={draftUrl}
           onChange={(event) => setDraftUrl(event.target.value)}
           aria-invalid={error !== null}
+          aria-describedby={error ? "api-base-url-error" : undefined}
           className="min-w-0 flex-1 rounded-md border border-[#1f2937] bg-[#0d1117] px-3 py-1.5 font-mono text-sm text-white outline-none focus:border-emerald-500/60"
         />
         <button
@@ -106,7 +111,7 @@ function ApiTargetForm({ value, onApply }: { value: string; onApply: (url: strin
           Connect
         </button>
       </div>
-      {error ? <p className="text-xs text-red-400">{error}</p> : null}
+      {error ? <p id="api-base-url-error" role="alert" className="text-xs text-red-400">{error}</p> : null}
     </form>
   )
 }

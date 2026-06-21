@@ -137,7 +137,7 @@ export function EvictionVisual() {
         >
           step →
         </button>
-        <span className="ml-auto text-[#6b7280]">
+        <span className="ml-auto text-[#8b949e]">
           step {cursor + 1} / {pattern.length}
         </span>
       </div>

@@ -8,19 +8,26 @@ import { useAppStore } from "@/store/appStore"
 
 export function DashboardPage() {
   const baseUrl = useAppStore((s) => s.apiBaseUrl)
-  const health = useNodeStatus()
-  const { status, latest, memory, throughput } = useNodeEvents()
+  const { health, error: healthError } = useNodeStatus()
+  const { status, latest, memory, throughput, error: eventsError } = useNodeEvents()
   const [engine, setEngine] = useState<EngineStateResponse | null>(null)
+  const [engineError, setEngineError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     const ctrl = new AbortController()
     getEngineState(ctrl.signal)
       .then((data) => {
-        if (!cancelled) setEngine(data)
+        if (!cancelled) {
+          setEngine(data)
+          setEngineError(null)
+        }
       })
-      .catch(() => {
-        if (!cancelled) setEngine(null)
+      .catch((cause) => {
+        if (!cancelled) {
+          setEngine(null)
+          setEngineError(cause instanceof Error ? cause.message : String(cause))
+        }
       })
     return () => {
       cancelled = true
@@ -46,9 +53,14 @@ export function DashboardPage() {
       </header>
 
       {offline ? (
-        <OfflineNotice baseUrl={baseUrl} />
+        <OfflineNotice baseUrl={baseUrl} error={healthError} />
       ) : (
         <>
+          {engineError?.includes("unexpected response") || eventsError ? (
+            <div role="alert" className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+              {eventsError ?? engineError}
+            </div>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Node">
               <div className="font-mono text-lg text-white">{health.nodeId}</div>
@@ -89,11 +101,12 @@ export function DashboardPage() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <ChartCard title="Memory used">
-              <TimeSeriesChart data={memory} dataKey="used" format={formatBytes} />
+              <TimeSeriesChart ariaLabel="Memory usage over time" data={memory} dataKey="used" format={formatBytes} />
             </ChartCard>
             <ChartCard title="Commands per second">
               <TimeSeriesChart
                 data={throughput}
+                ariaLabel="Commands per second over time"
                 dataKey="ops"
                 color="#60a5fa"
                 format={(v) => v.toFixed(1)}
@@ -115,7 +128,7 @@ function StatusBadge({ status }: { status: "connecting" | "connected" | "disconn
   }
   const m = map[status]
   return (
-    <div className={`flex items-center gap-2 text-sm ${m.text}`}>
+    <div role="status" aria-live="polite" className={`flex items-center gap-2 text-sm ${m.text}`}>
       <span className={`h-2 w-2 rounded-full ${m.dot}`} />
       {m.label}
     </div>
@@ -125,7 +138,7 @@ function StatusBadge({ status }: { status: "connecting" | "connected" | "disconn
 function StatCard({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4">
-      <div className="text-xs uppercase tracking-wide text-[#6b7280]">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-[#8b949e]">{label}</div>
       <div className="mt-1">{children}</div>
     </div>
   )
@@ -140,10 +153,12 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
   )
 }
 
-function OfflineNotice({ baseUrl }: { baseUrl: string }) {
+function OfflineNotice({ baseUrl, error }: { baseUrl: string; error: string | null }) {
   return (
-    <div className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-6 text-sm text-[#9ca3af]">
-      <p className="text-white">Backend not reachable at {baseUrl}.</p>
+    <div role={error?.includes("unexpected response") ? "alert" : undefined} className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-6 text-sm text-[#9ca3af]">
+      <p className="text-white">
+        {error?.includes("unexpected response") ? error : `Backend not reachable at ${baseUrl}.`}
+      </p>
       <p className="mt-2">Start a node and try again, for example:</p>
       <pre className="mt-2 overflow-x-auto rounded bg-[#0d1117] p-3 font-mono text-xs text-[#e6edf3]">
         go run ./cmd/node -config configs/standalone.yaml
