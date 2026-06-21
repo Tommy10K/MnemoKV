@@ -27,8 +27,12 @@ func NewInMemory(maxEvents int) *InMemory {
 }
 
 func (m *InMemory) IncCounter(name string, _ ...string) {
+	m.AddCounter(name, 1)
+}
+
+func (m *InMemory) AddCounter(name string, delta uint64, _ ...string) {
 	m.mu.Lock()
-	m.counters[name]++
+	m.counters[name] += delta
 	m.mu.Unlock()
 }
 

@@ -104,35 +104,36 @@ func (sl *SkipList) Delete(score float64, member string) bool {
 	return true
 }
 
-func (sl *SkipList) Range(start, stop int) []SkipNode {
+func (sl *SkipList) Range(start, stop int64) []SkipNode {
 	if sl.length == 0 {
 		return nil
 	}
+	length := int64(sl.length)
 	if start < 0 {
-		start += sl.length
+		start += length
 	}
 	if stop < 0 {
-		stop += sl.length
+		stop += length
 	}
 	if start < 0 {
 		start = 0
 	}
-	if stop >= sl.length {
-		stop = sl.length - 1
+	if stop >= length {
+		stop = length - 1
 	}
 	if start > stop {
 		return nil
 	}
 
 	x := sl.head
-	for i := 0; i <= start; i++ {
+	for i := int64(0); i <= start; i++ {
 		x = x.forward[0]
 		if x == nil {
 			return nil
 		}
 	}
 
-	result := make([]SkipNode, 0, stop-start+1)
+	result := make([]SkipNode, 0, int(stop-start+1))
 	for i := start; i <= stop && x != nil; i++ {
 		result = append(result, SkipNode{Member: x.Member, Score: x.Score})
 		x = x.forward[0]

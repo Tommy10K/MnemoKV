@@ -16,18 +16,31 @@ engine:
   evictionPolicy: lru
 
 cluster:
+  id: demo-cluster
   enabled: true
   shardingEnabled: true
   replicationEnabled: true
-  autoFailover: true
-  writeSafetyMode: async
+  slotCount: 1024
+  routingMode: proxy
+  failoverMode: manual
   peers:
     - id: node-1
       address: 127.0.0.1:6381
+      apiAddress: 127.0.0.1:7381
     - id: node-2
       address: 127.0.0.1:6382
+      apiAddress: 127.0.0.1:7382
     - id: node-3
       address: 127.0.0.1:6383
+      apiAddress: 127.0.0.1:7383
+
+persistence:
+  enabled: true
+  dataDir: ./data/node-2
+  snapshotIntervalSec: 60
+  maxSnapshots: 5
+  loadOnStart: true
+  format: json                  # json | binary
 
 observability:
   apiBindAddr: 127.0.0.1

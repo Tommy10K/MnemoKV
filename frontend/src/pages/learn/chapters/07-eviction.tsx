@@ -15,7 +15,8 @@ export function Chapter07() {
       <UL>
         <li>Every write reserves bytes against a counter.</li>
         <li>Every delete releases them.</li>
-        <li>The current engine checks the limit before each command and evicts only when it is already over.</li>
+        <li>Memory-growing writes must reserve enough capacity before they become visible.</li>
+        <li>Reads never trigger eviction.</li>
         <li>The accounting is approximate — it tracks the dominant cost of each value, not every byte of overhead.</li>
       </UL>
 
@@ -38,8 +39,8 @@ export function Chapter07() {
           count. Great for stable hot keys, bad when popularity shifts.
         </li>
         <li>
-          <strong>Noop.</strong> Never chooses a victim. It is useful for unlimited-memory tests,
-          but the current backend can remain above a configured limit when it is selected.
+          <strong>Noeviction.</strong> Never chooses a victim. When a hard memory limit is set, it
+          rejects memory-growing writes instead of deleting existing keys.
         </li>
       </UL>
 
@@ -54,9 +55,8 @@ export function Chapter07() {
       </P>
 
       <Callout>
-        The Eviction Lab can switch policy on a live node. A write may push usage over the limit,
-        and a later command can trigger eviction before it runs. This timing should be treated as
-        current behavior, not the final memory-limit design.
+        The Eviction Lab can switch policy on a live node. FIFO, LRU, LFU, and Random evict before
+        a memory-growing write commits; noeviction keeps existing keys and rejects the write.
       </Callout>
     </>
   )

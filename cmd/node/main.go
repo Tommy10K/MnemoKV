@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"os"
@@ -16,7 +17,9 @@ import (
 	"github.com/mnemokv/mnemokv/internal/cluster"
 	"github.com/mnemokv/mnemokv/internal/config"
 	"github.com/mnemokv/mnemokv/internal/engine"
+	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
+	"github.com/mnemokv/mnemokv/internal/persistence"
 	"github.com/mnemokv/mnemokv/internal/server"
 )
 
@@ -28,14 +31,32 @@ func main() {
 	if err != nil {
 		log.Fatalf("config: %v", err)
 	}
-	log.Printf("node: starting %s mode=%s", cfg.Node.ID, cfg.Node.Mode)
+	logging.SetLevel(cfg.Observability.LogLevel)
+	logging.Infof("node: starting %s mode=%s", cfg.Node.ID, cfg.Node.Mode)
 
 	sink := metrics.NewInMemory(2048)
 	eng := engine.NewWithMetrics(cfg.Engine, sink)
 	clusterMgr := cluster.NewManagerWithNode(cfg.Cluster, cfg.Node.ID)
 	clusterMgr.AttachEngine(eng)
-	srv := server.New(cfg.Network, eng, sink)
-	apiSrv := api.New(cfg.Observability, cfg.Node, cfg.Cluster, eng, sink, clusterMgr)
+	snapshotMgr := persistence.New(cfg.Persistence, cfg.Node.ID, eng, clusterMgr.SnapshotMetadata)
+	snapshotMgr.SetMetadataRestorer(clusterMgr.RestoreMetadata)
+	if cfg.Persistence.Enabled && cfg.Persistence.LoadOnStart {
+		restored, restoreErr := snapshotMgr.RestoreLatest()
+		switch {
+		case restoreErr == nil:
+			logging.Infof("persistence: restored %d entries from %s", restored.RestoredEntries, restored.Path)
+		case errors.Is(restoreErr, persistence.ErrNoSnapshot):
+			logging.Infof("persistence: no snapshot found; starting with an empty dataset")
+		default:
+			log.Fatalf("persistence: restore: %v", restoreErr)
+		}
+	}
+	var commandExecutor server.CommandExecutor = eng
+	if cfg.Cluster.Enabled {
+		commandExecutor = clusterMgr.Coordinator()
+	}
+	srv := server.New(cfg.Network, commandExecutor, sink)
+	apiSrv := api.New(cfg.Observability, cfg.Node, cfg.Cluster, eng, sink, clusterMgr, snapshotMgr)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -43,6 +64,7 @@ func main() {
 	if err := clusterMgr.Start(ctx); err != nil {
 		log.Fatalf("cluster: start: %v", err)
 	}
+	snapshotMgr.Start(ctx)
 
 	serverDone := make(chan error, 1)
 	go func() { serverDone <- srv.Start(ctx) }()
@@ -52,27 +74,29 @@ func main() {
 
 	select {
 	case <-ctx.Done():
-		log.Printf("node: shutdown signal received")
+		logging.Infof("node: shutdown signal received")
 	case err := <-serverDone:
 		if err != nil {
-			log.Printf("server: exited: %v", err)
+			logging.Errorf("server: exited: %v", err)
 		}
 	case err := <-apiDone:
 		if err != nil {
-			log.Printf("api: exited: %v", err)
+			logging.Errorf("api: exited: %v", err)
 		}
 	}
+	cancel()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("server: shutdown: %v", err)
+		logging.Warnf("server: shutdown: %v", err)
 	}
 	if err := apiSrv.Shutdown(shutdownCtx); err != nil {
-		log.Printf("api: shutdown: %v", err)
+		logging.Warnf("api: shutdown: %v", err)
 	}
 	if err := clusterMgr.Shutdown(shutdownCtx); err != nil {
-		log.Printf("cluster: shutdown: %v", err)
+		logging.Warnf("cluster: shutdown: %v", err)
 	}
-	log.Printf("node: stopped")
+	snapshotMgr.Wait()
+	logging.Infof("node: stopped")
 }

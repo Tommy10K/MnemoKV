@@ -13,15 +13,21 @@ network:
 engine:
   stripeCount: 32
   memoryLimitBytes: 0          # 0 disables eviction
-  evictionPolicy: lru          # noop | fifo | lru | lfu | random
+  evictionPolicy: lru          # noeviction | fifo | lru | lfu | random
 
 cluster:
   enabled: false
   shardingEnabled: false
   replicationEnabled: false
-  autoFailover: false
-  writeSafetyMode: async       # async | strong
   peers: []
+
+persistence:
+  enabled: false
+  dataDir: ./data
+  snapshotIntervalSec: 60
+  maxSnapshots: 5
+  loadOnStart: true
+  format: json                  # json | binary
 
 observability:
   apiBindAddr: 127.0.0.1

@@ -9,34 +9,24 @@ export function Chapter09() {
         successful client reply guarantees during failures.
       </P>
 
-      <H2>MnemoKV asynchronous fan-out</H2>
+      <H2>MnemoKV replication contract</H2>
       <UL>
-        <li>A local write is applied before replication is queued.</li>
-        <li>One shared queue sends writes to configured peers sequentially.</li>
-        <li>A slow peer can delay delivery to peers behind it.</li>
-        <li>A process failure can lose queued writes.</li>
-      </UL>
-
-      <H2>MnemoKV synchronous fan-out</H2>
-      <UL>
-        <li>The node sends the command to every configured peer before local execution.</li>
-        <li>This adds network latency and can fail when a peer is unavailable.</li>
-        <li>It is not a quorum, consensus, rollback, or durable commit protocol.</li>
-        <li>An acknowledgement must not be interpreted as a linearizable or disk-durable write.</li>
+        <li>Every slot has exactly one leader and one assigned replica.</li>
+        <li>The leader sends the next ordered record to that replica before local mutation.</li>
+        <li>The client receives success only after the replica acknowledges application.</li>
+        <li>A missing leader, missing replica, or replica gap rejects the write.</li>
       </UL>
 
       <H2>Replication records</H2>
       <P>
-        Internal records contain source, slot, term, sequence, and timestamp metadata, but the
-        current <Code>REPLICATE</Code> wire command does not transmit or validate all of it. The
-        follower applies the inner command without rejecting stale, duplicate, or out-of-order
-        records.
+        Each <Code>REPLICATE</Code> request carries source node, slot, term, sequence, and command
+        payload. The follower accepts only its current leader and term, applies the next sequence,
+        treats an exact duplicate idempotently, and rejects gaps or stale records.
       </P>
 
       <Callout>
-        Use replication as a prototype demonstration of command fan-out between in-memory
-        processes. It is not yet a safe foundation for automatic failover or acknowledged-write
-        durability.
+        Acknowledgement means the write is present in memory on the leader and its assigned
+        replica. Disk durability still depends on the configured snapshot interval.
       </Callout>
     </>
   )

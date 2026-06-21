@@ -50,6 +50,42 @@ func TestZSetWithScores(t *testing.T) {
 	assertBulk(t, arr.Items[3], "2.5")
 }
 
+func TestZAddRejectsNaN(t *testing.T) {
+	e := newTestEngine()
+	if _, ok := exec(t, e, "ZADD", "z", "NaN", "bad").(resp.Error); !ok {
+		t.Fatal("expected NaN score error")
+	}
+	mustInt(t, exec(t, e, "ZCARD", "z"), 0)
+}
+
+func TestZAddAllowsInfinity(t *testing.T) {
+	e := newTestEngine()
+	mustInt(t, exec(t, e, "ZADD", "z", "-Inf", "low", "+Inf", "high", "-0", "zero"), 3)
+	mustBulk(t, exec(t, e, "ZSCORE", "z", "low"), "-inf")
+	mustBulk(t, exec(t, e, "ZSCORE", "z", "high"), "inf")
+	mustBulk(t, exec(t, e, "ZSCORE", "z", "zero"), "0")
+}
+
+func TestZAddDuplicateMemberCountsOnce(t *testing.T) {
+	e := newTestEngine()
+	mustInt(t, exec(t, e, "ZADD", "z", "1", "same", "2", "same"), 1)
+	mustInt(t, exec(t, e, "ZCARD", "z"), 1)
+	mustBulk(t, exec(t, e, "ZSCORE", "z", "same"), "2")
+}
+
+func TestZRangeRejectsUnknownAndExtraOptions(t *testing.T) {
+	e := newTestEngine()
+	mustInt(t, exec(t, e, "ZADD", "z", "1", "a"), 1)
+	for _, args := range [][]string{
+		{"z", "0", "-1", "UNKNOWN"},
+		{"z", "0", "-1", "WITHSCORES", "EXTRA"},
+	} {
+		if _, ok := exec(t, e, "ZRANGE", args...).(resp.Error); !ok {
+			t.Fatalf("expected ZRANGE error for %q", args)
+		}
+	}
+}
+
 func TestZScore(t *testing.T) {
 	e := newTestEngine()
 	exec(t, e, "ZADD", "z", "3.14", "pi")

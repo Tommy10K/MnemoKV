@@ -65,7 +65,7 @@ func (x *Executor) cmdLLen(cmd *resp.Command) resp.Frame {
 		return wrongArgs("llen")
 	}
 	key := cmd.Args[0]
-	e, ok := x.store.Get(key)
+	e, ok := x.store.Peek(key)
 	if !ok {
 		return resp.Integer(0)
 	}

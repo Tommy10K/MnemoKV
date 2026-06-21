@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/mnemokv/mnemokv/internal/cluster"
 	"github.com/mnemokv/mnemokv/internal/config"
 	"github.com/mnemokv/mnemokv/internal/engine"
 	"github.com/mnemokv/mnemokv/internal/metrics"
+	"github.com/mnemokv/mnemokv/internal/persistence"
 )
 
 func newTestServer() *Server {
@@ -24,7 +27,7 @@ func newTestServer() *Server {
 		config.ObservabilityConfig{},
 		config.NodeConfig{ID: "test", Mode: "standalone"},
 		config.ClusterConfig{},
-		eng, sink, cluMgr,
+		eng, sink, cluMgr, nil,
 	)
 }
 
@@ -43,6 +46,31 @@ func TestHealth(t *testing.T) {
 	}
 	if resp.Status != "ok" || resp.NodeID != "test" {
 		t.Fatalf("unexpected response: %+v", resp)
+	}
+}
+
+func TestReadHandlersRejectWrongMethods(t *testing.T) {
+	s := newTestServer()
+	cases := []struct {
+		path    string
+		handler http.HandlerFunc
+	}{
+		{"/health", s.handleHealth},
+		{"/engine/state", s.handleEngineState},
+		{"/metrics/summary", s.handleMetricsSummary},
+		{"/cluster/state", s.handleClusterState},
+		{"/events", s.handleEvents},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodPost, tc.path, nil)
+		rr := httptest.NewRecorder()
+		tc.handler(rr, req)
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("%s: expected 405, got %d", tc.path, rr.Code)
+		}
+		if allow := rr.Header().Get("Allow"); allow != http.MethodGet {
+			t.Fatalf("%s: Allow=%q, want GET", tc.path, allow)
+		}
 	}
 }
 
@@ -109,6 +137,84 @@ func TestCommands(t *testing.T) {
 	}
 	if got := send("NOPE"); got.Type != "error" {
 		t.Fatalf("NOPE: %+v", got)
+	}
+}
+
+func TestCommandsRejectTrailingJSON(t *testing.T) {
+	s := newTestServer()
+	req := httptest.NewRequest(http.MethodPost, "/commands", strings.NewReader(`{"args":["PING"]} {"args":["PING"]}`))
+	rr := httptest.NewRecorder()
+
+	s.handleCommands(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestCommandsRejectOversizedBody(t *testing.T) {
+	s := newTestServer()
+	body := `{"args":["PING","` + strings.Repeat("x", int(maxJSONBodyBytes)+1) + `"]}`
+	req := httptest.NewRequest(http.MethodPost, "/commands", strings.NewReader(body))
+	rr := httptest.NewRecorder()
+
+	s.handleCommands(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestPostHandlersRejectWrongMethods(t *testing.T) {
+	s := newTestServer()
+	cases := []struct {
+		path    string
+		handler http.HandlerFunc
+	}{
+		{"/commands", s.handleCommands},
+		{"/engine/eviction-policy", s.handleEvictionPolicy},
+		{"/admin/snapshot", s.handleSnapshot},
+		{"/cluster/promote", s.handleClusterPromote},
+		{"/cluster/replica", s.handleClusterReplica},
+		{"/cluster/sync", s.handleClusterSync},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+		rr := httptest.NewRecorder()
+		tc.handler(rr, req)
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("%s: expected 405, got %d", tc.path, rr.Code)
+		}
+		if allow := rr.Header().Get("Allow"); allow != http.MethodPost {
+			t.Fatalf("%s: Allow=%q, want POST", tc.path, allow)
+		}
+	}
+}
+
+type fakeSnapshotter struct {
+	result persistence.Result
+	err    error
+}
+
+func (f fakeSnapshotter) Snapshot() (persistence.Result, error) { return f.result, f.err }
+
+func TestManualSnapshot(t *testing.T) {
+	s := newTestServer()
+	s.snapshots = fakeSnapshotter{result: persistence.Result{
+		Path: "snapshot.json", Format: "json", CreatedAt: time.Unix(1, 0).UTC(), EntryCount: 2, Checksum: "abc",
+	}}
+	req := httptest.NewRequest(http.MethodPost, "/admin/snapshot", nil)
+	rr := httptest.NewRecorder()
+	s.handleSnapshot(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status = %d body=%s", rr.Code, rr.Body.String())
+	}
+	var result persistence.Result
+	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.EntryCount != 2 || result.Format != "json" {
+		t.Fatalf("unexpected result: %+v", result)
 	}
 }
 

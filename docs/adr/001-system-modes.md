@@ -2,27 +2,20 @@
 
 ## Status
 
-Accepted (baseline milestone).
-
-## Context
-
-The system supports multiple feature flags that combine into distinct operating modes. Without an explicit, exhaustive matrix, configuration combinations can quietly produce undefined behavior (e.g. enabling automatic failover without replication).
+Accepted and implemented.
 
 ## Decision
 
-Only the following startup mode combinations are supported. Any other combination must fail validation at startup.
+MnemoKV supports two startup modes. Configuration outside this matrix fails validation.
 
-| Mode | `cluster.enabled` | `cluster.shardingEnabled` | `cluster.replicationEnabled` | `cluster.autoFailover` | `cluster.writeSafetyMode` |
-|------|---|---|---|---|---|
-| standalone | false | false | false | false | n/a |
-| clustered-sharded | true | true | false | false | async |
-| clustered-replicated | true | true | true | false | async \| strong |
-| clustered-failover | true | true | true | true | strong |
+| Mode | `cluster.enabled` | `shardingEnabled` | `replicationEnabled` | Routing | Failover |
+|---|---:|---:|---:|---|---|
+| Standalone | false | false | false | local | n/a |
+| Cluster | true | true | true | `proxy` | `manual` |
 
-Rules:
+Cluster mode requires a cluster ID, 2–5 peers, a fixed slot count, a unique RESP and API address for
+every peer, and the local node in the peer list. The default slot count is 1,024. User-selectable
+async/strong replication and automatic failover are not supported.
 
-1. `autoFailover=true` requires `replicationEnabled=true`.
-2. `replicationEnabled=true` requires `shardingEnabled=true`.
-3. `writeSafetyMode=strong` requires `replicationEnabled=true`.
-4. `cluster.enabled=false` forces every other cluster flag to false.
-5. The baseline milestone (this commit) ships only the standalone mode end-to-end. Cluster fields are accepted by the config layer but their distributed behaviors are implemented in later phases.
+Standalone mode rejects leftover cluster flags or peers so a misspelled or partially disabled
+cluster cannot silently boot with different behavior.

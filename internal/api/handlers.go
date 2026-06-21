@@ -5,6 +5,9 @@ import (
 )
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
 	writeJSON(w, http.StatusOK, HealthResponse{
 		Status: "ok",
 		NodeID: s.node.ID,
@@ -13,17 +16,29 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEngineState(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
 	mem := s.engine.Memory()
 	policy := s.engine.Eviction().Policy().Name()
+	var rejected uint64
+	if s.metrics != nil {
+		rejected = s.metrics.Counter("eviction.rejected_writes")
+	}
 	writeJSON(w, http.StatusOK, EngineStateResponse{
 		UsedBytes:      mem.Used(),
 		MemoryLimit:    mem.Limit(),
+		AvailableBytes: mem.Available(),
 		UsageRatio:     mem.UsageRatio(),
 		EvictionPolicy: policy,
+		RejectedWrites: rejected,
 	})
 }
 
 func (s *Server) handleMetricsSummary(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
 	if s.metrics == nil {
 		writeJSON(w, http.StatusOK, MetricsSummary{Counters: map[string]uint64{}})
 		return
@@ -32,11 +47,16 @@ func (s *Server) handleMetricsSummary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleClusterState(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
 	resp := ClusterStateResponse{
 		Enabled:      s.cluster.Enabled,
 		NodeID:       s.node.ID,
-		WriteMode:    s.cluster.WriteSafetyMode,
-		AutoFailover: s.cluster.AutoFailover,
+		ClusterID:    s.cluster.ID,
+		SlotCount:    s.cluster.SlotCount,
+		RoutingMode:  s.cluster.RoutingMode,
+		FailoverMode: s.cluster.FailoverMode,
 	}
 	for _, p := range s.cluster.Peers {
 		resp.Peers = append(resp.Peers, p.ID)
@@ -49,8 +69,13 @@ func (s *Server) handleClusterState(w http.ResponseWriter, r *http.Request) {
 				State:   m.State,
 			})
 		}
-		if cp := s.cluMgr.ControlPlane(); cp != nil {
-			resp.Term = cp.CurrentTerm()
+		if metadata := s.cluMgr.Metadata(); metadata != nil {
+			state := metadata.Snapshot()
+			resp.MetadataVersion = state.Version
+			resp.Slots = make([]SlotStatus, len(state.Slots))
+			for i, slot := range state.Slots {
+				resp.Slots[i] = slotStatus(metadata, slot)
+			}
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)

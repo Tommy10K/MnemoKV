@@ -21,7 +21,7 @@ func startTestServer(t *testing.T) string {
 		Port:           port,
 		MaxConnections: 64,
 	}
-	eng := engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noop"})
+	eng := engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noeviction"})
 	srv := server.New(cfg, eng, metrics.NewNoop())
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -24,7 +24,7 @@ func startNode(t *testing.T) string {
 	ln.Close()
 
 	cfg := config.NetworkConfig{BindAddr: "127.0.0.1", Port: port, MaxConnections: 32}
-	eng := engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noop"})
+	eng := engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noeviction"})
 	srv := server.New(cfg, eng, metrics.NewNoop())
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -41,7 +41,7 @@ func startServer(t *testing.T, ctx context.Context) string {
 		ReadTimeoutMs:  0,
 		WriteTimeoutMs: 0,
 	}
-	eng := engine.New(config.EngineConfig{StripeCount: 16, EvictionPolicy: "noop"})
+	eng := engine.New(config.EngineConfig{StripeCount: 16, EvictionPolicy: "noeviction"})
 	srv := server.New(cfg, eng, metrics.NewNoop())
 
 	go func() { _ = srv.Start(ctx) }()
@@ -192,4 +192,55 @@ func TestSmokeBaselineCommandSet(t *testing.T) {
 
 	expect("FLUSHDB", "OK", "FLUSHDB")
 	expect("EXISTS after flush", "0", "EXISTS", "ctr")
+}
+
+func TestInvalidQuitDoesNotCloseConnection(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := dial(t, startServer(t, ctx))
+	defer c.close()
+
+	if got := c.send(t, "QUIT", "extra"); !strings.HasPrefix(got, "ERR:") {
+		t.Fatalf("expected QUIT arity error, got %q", got)
+	}
+	if got := c.send(t, "PING"); got != "PONG" {
+		t.Fatalf("connection closed after invalid QUIT, got %q", got)
+	}
+}
+
+func TestEmptyInlineCommandDoesNotCloseConnection(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := dial(t, startServer(t, ctx))
+	defer c.close()
+
+	if _, err := c.writer.WriteString("\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.writer.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.send(t, "PING"); got != "PONG" {
+		t.Fatalf("connection closed after empty line, got %q", got)
+	}
+}
+
+func TestEmptyRESPCommandReturnsErrorAndKeepsConnection(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := dial(t, startServer(t, ctx))
+	defer c.close()
+
+	if _, err := c.writer.WriteString("*0\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.writer.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.readReply(t); got != "ERR:ERR empty command" {
+		t.Fatalf("unexpected empty command reply: %q", got)
+	}
+	if got := c.send(t, "PING"); got != "PONG" {
+		t.Fatalf("connection closed after empty command, got %q", got)
+	}
 }

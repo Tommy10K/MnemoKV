@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"math"
 	"strconv"
 
 	"github.com/mnemokv/mnemokv/internal/resp"
@@ -12,13 +13,9 @@ func (x *Executor) cmdZAdd(cmd *resp.Command) resp.Frame {
 	}
 	key := cmd.Args[0]
 
-	pairs := make([]zsetPair, 0, (len(cmd.Args)-1)/2)
-	for i := 1; i < len(cmd.Args); i += 2 {
-		score, err := strconv.ParseFloat(string(cmd.Args[i]), 64)
-		if err != nil {
-			return resp.NewError("ERR", "value is not a valid float")
-		}
-		pairs = append(pairs, zsetPair{score: score, member: string(cmd.Args[i+1])})
+	pairs, frame := parseZAddPairs(cmd.Args[1:])
+	if frame != nil {
+		return frame
 	}
 
 	added, err := x.store.zsetAdd(key, pairs)
@@ -29,7 +26,7 @@ func (x *Executor) cmdZAdd(cmd *resp.Command) resp.Frame {
 }
 
 func (x *Executor) cmdZRange(cmd *resp.Command) resp.Frame {
-	if len(cmd.Args) < 3 {
+	if len(cmd.Args) != 3 && len(cmd.Args) != 4 {
 		return wrongArgs("zrange")
 	}
 	key := cmd.Args[0]
@@ -40,10 +37,11 @@ func (x *Executor) cmdZRange(cmd *resp.Command) resp.Frame {
 	}
 
 	withScores := false
-	if len(cmd.Args) > 3 {
-		if upperASCII(cmd.Args[3]) == "WITHSCORES" {
-			withScores = true
+	if len(cmd.Args) == 4 {
+		if upperASCII(cmd.Args[3]) != "WITHSCORES" {
+			return resp.NewError("ERR", "syntax error")
 		}
+		withScores = true
 	}
 
 	e, ok := x.store.Get(key)
@@ -54,13 +52,13 @@ func (x *Executor) cmdZRange(cmd *resp.Command) resp.Frame {
 		return wrongTypeError()
 	}
 	zv := e.Value.(*ZSetValue)
-	members := zv.Range(int(start), int(stop))
+	members := zv.Range(start, stop)
 
 	if withScores {
 		items := make([]resp.Frame, 0, len(members)*2)
 		for _, m := range members {
 			items = append(items, resp.BulkFromString(m.Member))
-			items = append(items, resp.BulkFromString(strconv.FormatFloat(m.Score, 'f', -1, 64)))
+			items = append(items, resp.BulkFromString(formatFloat64(m.Score)))
 		}
 		return resp.Array{Items: items}
 	}
@@ -76,7 +74,7 @@ func (x *Executor) cmdZCard(cmd *resp.Command) resp.Frame {
 	if len(cmd.Args) != 1 {
 		return wrongArgs("zcard")
 	}
-	e, ok := x.store.Get(cmd.Args[0])
+	e, ok := x.store.Peek(cmd.Args[0])
 	if !ok {
 		return resp.Integer(0)
 	}
@@ -101,12 +99,40 @@ func (x *Executor) cmdZScore(cmd *resp.Command) resp.Frame {
 	if !exists {
 		return resp.NullBulk
 	}
-	return resp.BulkFromString(strconv.FormatFloat(score, 'f', -1, 64))
+	return resp.BulkFromString(formatFloat64(score))
+}
+
+func formatFloat64(value float64) string {
+	switch {
+	case value == 0:
+		return "0"
+	case math.IsInf(value, 1):
+		return "inf"
+	case math.IsInf(value, -1):
+		return "-inf"
+	default:
+		return strconv.FormatFloat(value, 'f', -1, 64)
+	}
 }
 
 type zsetPair struct {
 	score  float64
 	member string
+}
+
+func parseZAddPairs(args [][]byte) ([]zsetPair, resp.Frame) {
+	if len(args) < 2 || len(args)%2 != 0 {
+		return nil, wrongArgs("zadd")
+	}
+	pairs := make([]zsetPair, 0, len(args)/2)
+	for i := 0; i < len(args); i += 2 {
+		score, err := strconv.ParseFloat(string(args[i]), 64)
+		if err != nil || math.IsNaN(score) {
+			return nil, resp.NewError("ERR", "value is not a valid float")
+		}
+		pairs = append(pairs, zsetPair{score: score, member: string(args[i+1])})
+	}
+	return pairs, nil
 }
 
 func (s *Store) zsetAdd(key []byte, pairs []zsetPair) (int, error) {

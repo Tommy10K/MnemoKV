@@ -10,28 +10,47 @@ import (
 	"github.com/mnemokv/mnemokv/internal/cluster"
 	"github.com/mnemokv/mnemokv/internal/config"
 	"github.com/mnemokv/mnemokv/internal/engine"
+	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
+	"github.com/mnemokv/mnemokv/internal/persistence"
+	"github.com/mnemokv/mnemokv/internal/resp"
 )
 
+type Snapshotter interface {
+	Snapshot() (persistence.Result, error)
+}
+
+type CommandExecutor interface {
+	Execute(*resp.Command) resp.Frame
+}
+
 type Server struct {
-	cfg     config.ObservabilityConfig
-	node    config.NodeConfig
-	cluster config.ClusterConfig
-	engine  *engine.Engine
-	metrics *metrics.InMemory
-	cluMgr  *cluster.Manager
+	cfg       config.ObservabilityConfig
+	node      config.NodeConfig
+	cluster   config.ClusterConfig
+	engine    *engine.Engine
+	executor  CommandExecutor
+	metrics   *metrics.InMemory
+	cluMgr    *cluster.Manager
+	snapshots Snapshotter
 
 	httpSrv *http.Server
 }
 
-func New(cfg config.ObservabilityConfig, node config.NodeConfig, clusterCfg config.ClusterConfig, eng *engine.Engine, sink *metrics.InMemory, cluMgr *cluster.Manager) *Server {
+func New(cfg config.ObservabilityConfig, node config.NodeConfig, clusterCfg config.ClusterConfig, eng *engine.Engine, sink *metrics.InMemory, cluMgr *cluster.Manager, snapshots Snapshotter) *Server {
+	executor := CommandExecutor(eng)
+	if cluMgr != nil && cluMgr.Enabled() && cluMgr.Coordinator() != nil {
+		executor = cluMgr.Coordinator()
+	}
 	return &Server{
-		cfg:     cfg,
-		node:    node,
-		cluster: clusterCfg,
-		engine:  eng,
-		metrics: sink,
-		cluMgr:  cluMgr,
+		cfg:       cfg,
+		node:      node,
+		cluster:   clusterCfg,
+		engine:    eng,
+		executor:  executor,
+		metrics:   sink,
+		cluMgr:    cluMgr,
+		snapshots: snapshots,
 	}
 }
 
@@ -45,6 +64,7 @@ func (s *Server) Start(ctx context.Context) error {
 		Handler:           withCORS(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	logging.Infof("api: listening on %s", addr)
 
 	errCh := make(chan error, 1)
 	go func() {

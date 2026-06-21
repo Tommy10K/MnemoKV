@@ -8,6 +8,9 @@ import (
 )
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -40,13 +43,15 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 func (s *Server) snapshotPayload() map[string]any {
 	mem := s.engine.Memory()
 	out := map[string]any{
-		"timestamp":   time.Now().Unix(),
-		"usedBytes":   mem.Used(),
-		"memoryLimit": mem.Limit(),
-		"policy":      s.engine.Eviction().Policy().Name(),
+		"timestamp":      time.Now().Unix(),
+		"usedBytes":      mem.Used(),
+		"memoryLimit":    mem.Limit(),
+		"availableBytes": mem.Available(),
+		"policy":         s.engine.Eviction().Policy().Name(),
 	}
 	if s.metrics != nil {
 		out["counters"] = s.metrics.Snapshot()
+		out["rejectedWrites"] = s.metrics.Counter("eviction.rejected_writes")
 	}
 	return out
 }

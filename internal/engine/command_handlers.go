@@ -68,7 +68,10 @@ func (x *Executor) cmdExpire(cmd *resp.Command) resp.Frame {
 		}
 		return resp.Integer(0)
 	}
-	expiresAt := nowNanos() + seconds*int64(1_000_000_000)
+	expiresAt, ok := expirationFromNow(seconds, int64(1_000_000_000))
+	if !ok {
+		return resp.NewError("ERR", "invalid expire time in 'expire' command")
+	}
 	if x.store.SetExpireAt(cmd.Args[0], expiresAt) {
 		return resp.Integer(1)
 	}
@@ -79,7 +82,7 @@ func (x *Executor) cmdTTL(cmd *resp.Command) resp.Frame {
 	if len(cmd.Args) != 1 {
 		return wrongArgs("ttl")
 	}
-	e, ok := x.store.Get(cmd.Args[0])
+	e, ok := x.store.Peek(cmd.Args[0])
 	if !ok {
 		return resp.Integer(-2)
 	}

@@ -9,13 +9,11 @@ import {
   type Mode,
   type NodeConfig,
   type Peer,
-  type WriteSafety,
 } from "@/lib/config"
 import { downloadFile } from "@/lib/download"
 import { useAppStore } from "@/store/appStore"
 
-const evictionPolicies: EvictionPolicy[] = ["noop", "fifo", "lru", "lfu", "random"]
-const writeModes: WriteSafety[] = ["async", "strong"]
+const evictionPolicies: EvictionPolicy[] = ["noeviction", "fifo", "lru", "lfu", "random"]
 
 export function ConfigPage() {
   const setApiBaseUrl = useAppStore((state) => state.setApiBaseUrl)
@@ -32,9 +30,10 @@ export function ConfigPage() {
       setConfig((c) => ({
         ...c,
         mode,
+        clusterId: "demo-cluster",
         shardingEnabled: true,
         replicationEnabled: true,
-        autoFailover: false,
+        slotCount: 1024,
         peers: defaultClusterPeers(3),
       }))
       return
@@ -54,7 +53,14 @@ export function ConfigPage() {
       const nextIndex = c.peers.length + 1
       return {
         ...c,
-        peers: [...c.peers, { id: `node-${nextIndex}`, address: `127.0.0.1:${6380 + nextIndex}` }],
+        peers: [
+          ...c.peers,
+          {
+            id: `node-${nextIndex}`,
+            address: `127.0.0.1:${6380 + nextIndex}`,
+            apiAddress: `127.0.0.1:${7380 + nextIndex}`,
+          },
+        ],
       }
     })
   }
@@ -132,39 +138,19 @@ export function ConfigPage() {
 
         {config.mode === "clustered" && (
           <Section title="Cluster">
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
-              Cluster mode is an experimental prototype. Live commands are not routed by key
-              ownership, replication is fan-out rather than consensus, and automatic failover
-              does not provide a one-leader safety guarantee.
+            <div className="rounded-md border border-sky-500/40 bg-sky-500/10 p-3 text-xs text-sky-200">
+              Cluster mode uses fixed slots, proxy routing, one synchronous replica per shard,
+              and explicit manual failover. Every node must use the same peer list and cluster id.
             </div>
-            <Field label="Sharding enabled">
-              <Toggle
-                checked={config.shardingEnabled}
-                onChange={(v) => update("shardingEnabled", v)}
-              />
+            <Field label="Cluster id" error={errorByField.get("clusterId")}>
+              <TextInput value={config.clusterId} onChange={(v) => update("clusterId", v)} />
             </Field>
-            <Field label="Replication enabled">
-              <Toggle
-                checked={config.replicationEnabled}
-                onChange={(v) => update("replicationEnabled", v)}
-              />
-            </Field>
-            <Field label="Auto-failover" error={errorByField.get("autoFailover")}>
-              <Toggle
-                checked={config.autoFailover}
-                onChange={(v) => update("autoFailover", v)}
-              />
-            </Field>
-            <Field label="Write safety">
-              <Segmented
-                options={writeModes}
-                value={config.writeSafetyMode}
-                onChange={(v) => update("writeSafetyMode", v as WriteSafety)}
-              />
+            <Field label="Slot count" error={errorByField.get("slotCount")}>
+              <NumberInput value={config.slotCount} onChange={(v) => update("slotCount", v)} />
             </Field>
             <p className="text-xs text-[#9ca3af]">
-              The backend setting named <span className="font-mono">strong</span> currently means
-              synchronous fan-out to configured peers. It is not a quorum or durable commit mode.
+              Sharding and replication are required in cluster mode. Writes are acknowledged only
+              after the assigned replica applies the next ordered record.
             </p>
 
             <div className="flex flex-col gap-2">
@@ -183,7 +169,7 @@ export function ConfigPage() {
               )}
               <div className="flex flex-col gap-2">
                 {config.peers.map((peer, i) => (
-                  <div key={i} className="flex gap-2">
+                  <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1.4fr_1.4fr_auto]">
                     <TextInput
                       value={peer.id}
                       onChange={(v) => updatePeer(i, { id: v })}
@@ -193,6 +179,11 @@ export function ConfigPage() {
                       value={peer.address}
                       onChange={(v) => updatePeer(i, { address: v })}
                       placeholder="host:port"
+                    />
+                    <TextInput
+                      value={peer.apiAddress}
+                      onChange={(v) => updatePeer(i, { apiAddress: v })}
+                      placeholder="API host:port"
                     />
                     <button
                       type="button"
@@ -263,7 +254,6 @@ export function ConfigPage() {
     </div>
   )
 }
-
 function apiUrlFor(bindAddr: string, port: number): string {
   const host = bindAddr === "0.0.0.0" ? "127.0.0.1" : bindAddr === "::" ? "[::1]" : bindAddr
   return `http://${host}:${port}`
@@ -362,25 +352,5 @@ function Segmented<T extends string>({
         </button>
       ))}
     </div>
-  )
-}
-
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className={[
-        "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-        checked ? "bg-emerald-500" : "bg-[#1f2937]",
-      ].join(" ")}
-    >
-      <span
-        className={[
-          "inline-block size-5 transform rounded-full bg-white transition-transform",
-          checked ? "translate-x-5" : "translate-x-0.5",
-        ].join(" ")}
-      />
-    </button>
   )
 }

@@ -8,9 +8,9 @@ import { useAppStore } from "@/store/appStore"
 
 const policies = [
   {
-    id: "noop",
-    label: "noop",
-    note: "Never evicts. The current backend can continue above a configured limit.",
+    id: "noeviction",
+    label: "noeviction",
+    note: "Never evicts. Rejects memory-growing writes that would exceed the hard limit.",
   },
   { id: "fifo", label: "FIFO", note: "Oldest insert wins the boot. Predictable and cheap." },
   { id: "lru", label: "LRU", note: "Least recently used. Strong for temporal locality." },
@@ -57,8 +57,10 @@ export function EvictionLabPage() {
   const offline = health === null
   const current = latest?.policy ?? engine?.evictionPolicy ?? "—"
   const evictionCount = latest?.counters?.["eviction.count"] ?? 0
+  const rejectedWrites = latest?.rejectedWrites ?? engine?.rejectedWrites ?? 0
   const usedBytes = latest?.usedBytes ?? engine?.usedBytes ?? 0
   const memoryLimit = latest?.memoryLimit ?? engine?.memoryLimit ?? 0
+  const availableBytes = latest?.availableBytes ?? engine?.availableBytes ?? 0
   const usageRatio = memoryLimit > 0 ? usedBytes / memoryLimit : 0
 
   async function switchTo(id: string) {
@@ -112,6 +114,19 @@ export function EvictionLabPage() {
             <Card label="Evicted so far">
               <div className="text-2xl text-white">{evictionCount.toLocaleString()}</div>
               <div className="mt-1 text-xs text-[#9ca3af]">since this node started</div>
+            </Card>
+          </section>
+
+          <section className="grid gap-4 sm:grid-cols-2">
+            <Card label="Available bytes">
+              <div className="text-2xl text-white">{formatBytes(availableBytes)}</div>
+              <div className="mt-1 text-xs text-[#9ca3af]">
+                before the next memory-growing write must evict or fail
+              </div>
+            </Card>
+            <Card label="Rejected writes">
+              <div className="text-2xl text-white">{rejectedWrites.toLocaleString()}</div>
+              <div className="mt-1 text-xs text-[#9ca3af]">OOM-style hard-limit rejections</div>
             </Card>
           </section>
 
@@ -190,8 +205,8 @@ export function EvictionLabPage() {
             {memoryLimit > 0 ? (
               <p>
                 Generate load with the Workloads tab to exercise the configured{" "}
-                {formatBytes(memoryLimit)} limit. Eviction currently runs before a later command
-                when usage is already over the limit, so the graph may briefly remain above it.
+                {formatBytes(memoryLimit)} hard limit. Memory-growing writes reserve space before
+                they commit; with noeviction they fail instead of deleting existing keys.
               </p>
             ) : (
               <p className="text-amber-300">

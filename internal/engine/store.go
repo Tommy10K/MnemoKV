@@ -77,9 +77,22 @@ func (s *Store) adjustUsed(oldSize, newSize uint64) {
 	}
 }
 
-// Get returns a snapshot view of the entry. Lazy expiration: if the entry has
-// expired, it is deleted in place and the call returns (nil, false).
+// Get returns a shallow snapshot of the entry and updates access metadata.
+// Value objects are immutable strings or independently synchronized
+// containers, so copying the Entry prevents callers from racing with metadata
+// and value-pointer updates after the stripe lock is released.
 func (s *Store) Get(key []byte) (*Entry, bool) {
+	return s.get(key, true)
+}
+
+// Peek returns a shallow snapshot without updating access metadata. It is used
+// by administrative reads and admission planning so they do not protect keys
+// from LRU/LFU eviction.
+func (s *Store) Peek(key []byte) (*Entry, bool) {
+	return s.get(key, false)
+}
+
+func (s *Store) get(key []byte, touch bool) (*Entry, bool) {
 	st := s.stripeFor(key)
 	now := nowNanos()
 	st.mu.Lock() // upgrade-friendly: we may need to delete on expiry
@@ -94,8 +107,11 @@ func (s *Store) Get(key []byte) (*Entry, bool) {
 		s.subUsed(e.SizeBytes)
 		return nil, false
 	}
-	e.touchRead(now)
-	return e, true
+	if touch {
+		e.touchRead(now)
+	}
+	snapshot := *e
+	return &snapshot, true
 }
 
 // Put inserts or replaces the entry under its key. The caller is responsible
@@ -111,37 +127,100 @@ func (s *Store) Put(entry *Entry) {
 		// Replace: subtract the old size, then add the new one.
 		s.subUsed(existing.SizeBytes)
 		entry.CreatedAtNs = existing.CreatedAtNs
-		entry.AccessCount = existing.AccessCount
+		entry.AccessCount = existing.AccessCount + 1
+		entry.Version = existing.Version + 1
 	} else {
 		entry.CreatedAtNs = now
+		entry.Version = 1
 	}
 	entry.UpdatedAtNs = now
 	entry.LastAccessNs = now
-	entry.Version++
 	st.entries[entry.Key] = entry
 	s.addUsed(entry.SizeBytes)
+}
+
+type setCondition uint8
+
+const (
+	setAlways setCondition = iota
+	setIfMissing
+	setIfPresent
+)
+
+// setString checks the condition and writes the new value while holding one
+// stripe lock. This makes SET NX/XX a single atomic store operation.
+func (s *Store) setString(key, value []byte, expiresAtNs int64, condition setCondition) bool {
+	st := s.stripeFor(key)
+	now := nowNanos()
+	st.mu.Lock()
+	defer st.mu.Unlock()
+
+	existing, exists := st.entries[string(key)]
+	if exists && existing.IsExpired(now) {
+		delete(st.entries, existing.Key)
+		s.subUsed(existing.SizeBytes)
+		existing = nil
+		exists = false
+	}
+
+	if condition == setIfMissing && exists {
+		return false
+	}
+	if condition == setIfPresent && !exists {
+		return false
+	}
+
+	entry := &Entry{
+		Key:          string(key),
+		Type:         ValueTypeString,
+		Value:        NewStringValue(append([]byte(nil), value...)),
+		SizeBytes:    stringEntrySize(key, value),
+		ExpiresAtNs:  expiresAtNs,
+		CreatedAtNs:  now,
+		UpdatedAtNs:  now,
+		LastAccessNs: now,
+		AccessCount:  1,
+		Version:      1,
+	}
+	if exists {
+		entry.CreatedAtNs = existing.CreatedAtNs
+		entry.AccessCount = existing.AccessCount + 1
+		entry.Version = existing.Version + 1
+		s.adjustUsed(existing.SizeBytes, entry.SizeBytes)
+	} else {
+		s.addUsed(entry.SizeBytes)
+	}
+	st.entries[entry.Key] = entry
+	return true
 }
 
 // Delete removes the entry under key, if any. It returns true if a key was
 // removed.
 func (s *Store) Delete(key []byte) bool {
+	_, ok := s.DeleteWithSize(key)
+	return ok
+}
+
+// DeleteWithSize removes the entry under key and returns the accounted bytes
+// freed. It is used by eviction metrics.
+func (s *Store) DeleteWithSize(key []byte) (uint64, bool) {
 	st := s.stripeFor(key)
 	st.mu.Lock()
 	defer st.mu.Unlock()
 
 	e, ok := st.entries[string(key)]
 	if !ok {
-		return false
+		return 0, false
 	}
 	delete(st.entries, e.Key)
 	s.subUsed(e.SizeBytes)
-	return true
+	return e.SizeBytes, true
 }
 
 // Exists reports whether the key is present and unexpired. Lazy expiration is
 // applied identically to Get.
 func (s *Store) Exists(key []byte) bool {
-	_, ok := s.Get(key)
+	_, ok := s.Peek(key)
 	return ok
 }
 
@@ -277,6 +356,7 @@ func (s *Store) SetExpireAt(key []byte, expiresAtNs int64) bool {
 		return false
 	}
 	e.ExpiresAtNs = expiresAtNs
+	e.touchWrite(now)
 	return true
 }
 

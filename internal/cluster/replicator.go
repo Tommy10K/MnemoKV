@@ -2,116 +2,62 @@ package cluster
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
+
+	"github.com/mnemokv/mnemokv/internal/resp"
 )
 
+// Replicator serializes leader writes and synchronously applies each record to
+// exactly the replica assigned by the authoritative slot metadata.
 type Replicator struct {
-	mode      string
-	transport Transport
-	queue     *ReplicationQueue
-	followers []string
 	nodeID    string
-
-	wg     sync.WaitGroup
-	cancel context.CancelFunc
-
-	mu      sync.Mutex
-	applied uint64
+	metadata  *Metadata
+	transport Transport
+	mu        sync.Mutex
 }
 
-func NewReplicator(mode, nodeID string, followers []string, transport Transport, queue *ReplicationQueue) *Replicator {
-	return &Replicator{
-		mode:      mode,
-		nodeID:    nodeID,
-		followers: followers,
-		transport: transport,
-		queue:     queue,
-	}
+func NewReplicator(nodeID string, metadata *Metadata, transport Transport) *Replicator {
+	return &Replicator{nodeID: nodeID, metadata: metadata, transport: transport}
 }
 
-func (r *Replicator) Mode() string { return r.mode }
+func (r *Replicator) Mode() string { return "synchronous" }
 
-func (r *Replicator) Start(ctx context.Context) {
-	if len(r.followers) == 0 || r.transport == nil {
-		return
+func (r *Replicator) Replicate(ctx context.Context, cmd *resp.Command) error {
+	key := resp.ExtractPrimaryKey(cmd)
+	if len(key) == 0 {
+		return nil
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	r.cancel = cancel
-	r.wg.Add(1)
-	go r.drainLoop(ctx)
-}
-
-func (r *Replicator) Shutdown() {
-	if r.cancel != nil {
-		r.cancel()
-	}
-	if r.queue != nil {
-		r.queue.Close()
-	}
-	r.wg.Wait()
-}
-
-func (r *Replicator) Replicate(args []string, slot uint16) ReplicationRecord {
-	rec := ReplicationRecord{
-		SourceNodeID: r.nodeID,
-		Slot:         slot,
-		Sequence:     r.queue.NextSequence(),
-		Args:         args,
-	}
-	r.queue.Enqueue(rec)
-	return rec
-}
-
-func (r *Replicator) ReplicateSync(ctx context.Context, args []string, slot uint16) error {
-	rec := ReplicationRecord{
-		SourceNodeID: r.nodeID,
-		Slot:         slot,
-		Sequence:     r.queue.NextSequence(),
-		Args:         args,
-	}
-	return r.fanout(ctx, rec)
-}
-
-func (r *Replicator) drainLoop(ctx context.Context) {
-	defer r.wg.Done()
-	for {
-		rec, ok := r.queue.Dequeue(ctx)
-		if !ok {
-			return
-		}
-		_ = r.fanout(ctx, rec)
-	}
-}
-
-func (r *Replicator) fanout(ctx context.Context, rec ReplicationRecord) error {
-	var lastErr error
-	for _, follower := range r.followers {
-		if err := r.transport.SendReplication(ctx, follower, rec); err != nil {
-			lastErr = err
-			continue
-		}
-		r.markApplied(rec.Sequence)
-	}
-	return lastErr
-}
-
-func (r *Replicator) markApplied(seq uint64) {
+	slot := r.metadata.SlotForKey(key)
 	r.mu.Lock()
-	if seq > r.applied {
-		r.applied = seq
+	defer r.mu.Unlock()
+	state, sequence, err := r.metadata.PrepareReplication(slot)
+	if err != nil {
+		return err
 	}
-	r.mu.Unlock()
+	rec := ReplicationRecord{
+		SourceNodeID: r.nodeID, Slot: slot, Term: state.Term, Sequence: sequence,
+		Args: commandToStrings(cmd),
+	}
+	if err := r.transport.SendReplication(ctx, state.ReplicaID, rec); err != nil {
+		if errors.Is(err, ErrSequenceGap) || errors.Is(err, ErrStaleTerm) {
+			return err
+		}
+		return fmt.Errorf("%w: %v", ErrReplicaUnavailable, err)
+	}
+	return r.metadata.CommitLeaderSequence(slot, state.Term, sequence)
 }
 
 func (r *Replicator) AppliedSequence() uint64 {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.applied
+	snapshot := r.metadata.Snapshot()
+	var max uint64
+	for _, slot := range snapshot.Slots {
+		if slot.LastAppliedSequence > max {
+			max = slot.LastAppliedSequence
+		}
+	}
+	return max
 }
 
-func (r *Replicator) QueueDepth() int64 {
-	if r.queue == nil {
-		return 0
-	}
-	return r.queue.Depth()
-}
+func (r *Replicator) QueueDepth() int64 { return 0 }

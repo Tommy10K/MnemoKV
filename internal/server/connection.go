@@ -4,12 +4,11 @@ import (
 	"bufio"
 	"errors"
 	"io"
-	"log"
 	"net"
 	"time"
 
 	"github.com/mnemokv/mnemokv/internal/config"
-	"github.com/mnemokv/mnemokv/internal/engine"
+	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
 	"github.com/mnemokv/mnemokv/internal/resp"
 )
@@ -18,24 +17,24 @@ import (
 // writes responses. A new handler is created per connection so its parser,
 // writer, and read buffer never cross goroutine boundaries.
 type connectionHandler struct {
-	conn   net.Conn
-	reader *bufio.Reader
-	writer *resp.Writer
-	parser *resp.Parser
-	engine *engine.Engine
-	sink   metrics.Sink
-	cfg    config.NetworkConfig
+	conn     net.Conn
+	reader   *bufio.Reader
+	writer   *resp.Writer
+	parser   *resp.Parser
+	executor CommandExecutor
+	sink     metrics.Sink
+	cfg      config.NetworkConfig
 }
 
-func newConnectionHandler(conn net.Conn, eng *engine.Engine, sink metrics.Sink, cfg config.NetworkConfig) *connectionHandler {
+func newConnectionHandler(conn net.Conn, executor CommandExecutor, sink metrics.Sink, cfg config.NetworkConfig) *connectionHandler {
 	return &connectionHandler{
-		conn:   conn,
-		reader: bufio.NewReaderSize(conn, 32*1024),
-		writer: resp.NewWriterSize(conn, 32*1024),
-		parser: resp.NewParser(),
-		engine: eng,
-		sink:   sink,
-		cfg:    cfg,
+		conn:     conn,
+		reader:   bufio.NewReaderSize(conn, 32*1024),
+		writer:   resp.NewWriterSize(conn, 32*1024),
+		parser:   resp.NewParser(),
+		executor: executor,
+		sink:     sink,
+		cfg:      cfg,
 	}
 }
 
@@ -48,16 +47,22 @@ func (h *connectionHandler) serve() {
 		h.applyReadDeadline()
 		cmd, err := h.parser.Next(h.reader)
 		if err != nil {
+			if errors.Is(err, resp.ErrEmptyLine) {
+				continue
+			}
+			if errors.Is(err, resp.ErrEmptyCommand) {
+				_ = h.writeFrame(resp.NewError("ERR", "empty command"))
+				continue
+			}
 			h.handleParseError(err)
 			return
 		}
 
 		start := time.Now()
-		frame := h.engine.Execute(cmd)
+		frame := h.executor.Execute(cmd)
 		h.sink.ObserveLatency("command_latency", time.Since(start), cmd.Name)
-		h.sink.IncCounter("commands_total", cmd.Name)
 
-		quit := cmd.Name == "QUIT"
+		quit := cmd.Name == "QUIT" && len(cmd.Args) == 0
 		resp.Release(cmd)
 
 		if err := h.writeFrame(frame); err != nil {
@@ -98,9 +103,6 @@ func (h *connectionHandler) handleParseError(err error) {
 		// Clean disconnect.
 	case errors.Is(err, net.ErrClosed):
 		// Listener shut down; drop the connection silently.
-	case errors.Is(err, resp.ErrEmptyCommand):
-		// Empty inline line (just a CR/LF). Acceptable; loop again.
-		log.Printf("server: empty command on %s", h.conn.RemoteAddr())
 	case errors.Is(err, resp.ErrProtocol):
 		_ = h.writeFrame(frameProtocolError)
 	default:
@@ -109,6 +111,6 @@ func (h *connectionHandler) handleParseError(err error) {
 			// Idle connection. Close it.
 			return
 		}
-		log.Printf("server: read from %s: %v", h.conn.RemoteAddr(), err)
+		logging.Warnf("server: read from %s: %v", h.conn.RemoteAddr(), err)
 	}
 }

@@ -1,12 +1,12 @@
 import { useMemo } from "react"
-import type { PeerStatus } from "@/api/types"
+import type { ClusterStateResponse, PeerStatus } from "@/api/types"
 import { TopologyGraph } from "@/components/cluster/TopologyGraph"
-import { useClusterState, type TermChange } from "@/hooks/useClusterState"
+import { useClusterState, type MetadataChange } from "@/hooks/useClusterState"
 import { useAppStore } from "@/store/appStore"
 
 export function ClusterPage() {
   const baseUrl = useAppStore((state) => state.apiBaseUrl)
-  const { state, reachable, termHistory } = useClusterState()
+  const { state, reachable, metadataHistory } = useClusterState()
 
   if (!reachable || state === null) {
     return (
@@ -17,11 +17,8 @@ export function ClusterPage() {
     )
   }
 
-  if (!state.enabled) {
-    return <StandaloneView nodeId={state.nodeId} />
-  }
-
-  return <ClusterView state={state} termHistory={termHistory} baseUrl={baseUrl} />
+  if (!state.enabled) return <StandaloneView nodeId={state.nodeId} />
+  return <ClusterView state={state} metadataHistory={metadataHistory} baseUrl={baseUrl} />
 }
 
 function StandaloneView({ nodeId }: { nodeId: string }) {
@@ -29,129 +26,95 @@ function StandaloneView({ nodeId }: { nodeId: string }) {
     <div className="flex flex-col gap-4">
       <header>
         <h1 className="text-2xl font-semibold text-white">Cluster</h1>
-        <p className="text-sm text-[#9ca3af]">
-          This node is running in standalone mode. There is no cluster to visualize.
-        </p>
+        <p className="text-sm text-[#9ca3af]">This node is running in standalone mode.</p>
       </header>
-
       <div className="flex w-fit items-center gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm">
         <span className="h-2 w-2 rounded-full bg-emerald-400" />
         <span className="font-mono text-white">{nodeId}</span>
         <span className="text-[#9ca3af]">standalone</span>
       </div>
-
-      <p className="text-xs text-[#6b7280]">
-        Generate a clustered config from the <span className="font-mono">Configure</span> tab and
-        start three nodes to see the topology here.
-      </p>
     </div>
   )
 }
 
-type ClusterViewProps = {
-  state: {
-    nodeId: string
-    enabled: boolean
-    writeMode: string
-    autoFailover: boolean
-    term?: number
-    peers: string[]
-    membership?: PeerStatus[]
-  }
-  termHistory: TermChange[]
+function ClusterView({
+  state,
+  metadataHistory,
+  baseUrl,
+}: {
+  state: ClusterStateResponse
+  metadataHistory: MetadataChange[]
   baseUrl: string
-}
-
-function ClusterView({ state, termHistory, baseUrl }: ClusterViewProps) {
+}) {
   const peers = useMemo<PeerStatus[]>(
     () => fillMissing(state.membership ?? [], state.peers, state.nodeId),
     [state.membership, state.peers, state.nodeId],
   )
-
-  const counts = peers.reduce<Record<string, number>>((acc, p) => {
-    acc[p.state] = (acc[p.state] ?? 0) + 1
+  const counts = peers.reduce<Record<string, number>>((acc, peer) => {
+    acc[peer.state] = (acc[peer.state] ?? 0) + 1
     return acc
   }, {})
+  const slots = state.slots ?? []
+  const localLeaderSlots = slots.filter((slot) => slot.localRole === "leader").length
+  const localReplicaSlots = slots.filter((slot) => slot.localRole === "replica").length
+  const unreadyReplicas = slots.filter((slot) => !slot.replicaReady).length
 
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold text-white">Cluster prototype</h1>
-          <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs uppercase tracking-wide text-amber-300">
-            experimental
-          </span>
-        </div>
+        <h1 className="text-2xl font-semibold text-white">Cluster</h1>
         <p className="text-sm text-[#9ca3af]">
-          Local membership view reported by <span className="font-mono text-white">{state.nodeId}</span>{" "}
-          at <span className="font-mono">{baseUrl}</span>. It is not a cluster-wide agreement view.
-        </p>
-        <p className="mt-2 text-xs text-amber-300">
-          Routing is not connected to live commands, membership uses all-to-all heartbeats, and
-          automatic failover does not yet guarantee one leader or prevent split brain.
+          Authoritative slot metadata observed by <span className="font-mono text-white">{state.nodeId}</span>{" "}
+          at <span className="font-mono">{baseUrl}</span>. Failover and replica repair are manual.
         </p>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Term">{state.term ?? 0}</StatCard>
-        <StatCard label="Write fan-out">{writeModeLabel(state.writeMode)}</StatCard>
-        <StatCard label="Auto failover config">{state.autoFailover ? "on" : "off"}</StatCard>
-        <StatCard label="Observed healthy">
-          {(counts.healthy ?? 0)}/{peers.length}
-        </StatCard>
+        <StatCard label="Metadata version">{state.metadataVersion ?? 0}</StatCard>
+        <StatCard label="Local slots">{localLeaderSlots} leader / {localReplicaSlots} replica</StatCard>
+        <StatCard label="Replica readiness">{slots.length - unreadyReplicas}/{slots.length}</StatCard>
+        <StatCard label="Observed healthy">{counts.healthy ?? 0}/{peers.length}</StatCard>
       </div>
 
       <TopologyGraph peers={peers} selfId={state.nodeId} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4">
-          <h2 className="mb-3 text-sm uppercase tracking-wide text-[#6b7280]">Membership</h2>
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs uppercase tracking-wide text-[#6b7280]">
-              <tr>
-                <th className="pb-2">Node</th>
-                <th className="pb-2">Address</th>
-                <th className="pb-2">State</th>
-              </tr>
-            </thead>
-            <tbody className="font-mono text-[#e6edf3]">
-              {peers.map((p) => (
-                <tr key={p.id} className="border-t border-[#1f2937]">
-                  <td className="py-2">
-                    {p.id}
-                    {p.id === state.nodeId ? (
-                      <span className="ml-2 font-sans text-xs text-emerald-300">self</span>
-                    ) : null}
-                  </td>
-                  <td className="py-2">{p.address}</td>
-                  <td className="py-2">
-                    <StateDot state={p.state} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <h2 className="mb-3 text-sm uppercase tracking-wide text-[#6b7280]">Slot assignments</h2>
+          <div className="max-h-80 overflow-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs uppercase tracking-wide text-[#6b7280]">
+                <tr><th className="pb-2">Slot</th><th className="pb-2">Leader</th><th className="pb-2">Replica</th><th className="pb-2">Term / seq</th></tr>
+              </thead>
+              <tbody className="font-mono text-[#e6edf3]">
+                {slots.map((slot) => (
+                  <tr key={slot.number} className="border-t border-[#1f2937]">
+                    <td className="py-1.5">{slot.number}</td>
+                    <td>{slot.leaderId}</td>
+                    <td className={slot.replicaReady ? "" : "text-amber-300"}>{slot.replicaId || "unassigned"}</td>
+                    <td>{slot.term} / {slot.lastSequence}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4">
-          <h2 className="mb-3 text-sm uppercase tracking-wide text-[#6b7280]">Local term observations</h2>
-          {termHistory.length === 0 ? (
-            <p className="text-sm text-[#6b7280]">
-              No term changes recorded yet. Term {state.term ?? 0} is the starting term.
-            </p>
+          <h2 className="mb-3 text-sm uppercase tracking-wide text-[#6b7280]">Metadata changes</h2>
+          <p className="mb-3 text-xs text-[#6b7280]">
+            {state.clusterId} · {state.slotCount} slots · {state.routingMode} routing · {state.failoverMode} failover
+          </p>
+          {metadataHistory.length === 0 ? (
+            <p className="text-sm text-[#6b7280]">No metadata changes observed.</p>
           ) : (
             <ol className="space-y-2 text-sm">
-              {termHistory
-                .slice()
-                .reverse()
-                .map((entry, i) => (
-                  <li key={`${entry.at}-${i}`} className="flex items-baseline gap-3">
-                    <span className="text-xs text-[#6b7280]">
-                      {new Date(entry.at).toLocaleTimeString()}
-                    </span>
-                    <span className="font-mono text-[#e6edf3]">term → {entry.term}</span>
-                  </li>
-                ))}
+              {metadataHistory.slice().reverse().map((entry, i) => (
+                <li key={`${entry.at}-${i}`} className="flex items-baseline gap-3">
+                  <span className="text-xs text-[#6b7280]">{new Date(entry.at).toLocaleTimeString()}</span>
+                  <span className="font-mono text-[#e6edf3]">version → {entry.version}</span>
+                </li>
+              ))}
             </ol>
           )}
         </section>
@@ -161,57 +124,10 @@ function ClusterView({ state, termHistory, baseUrl }: ClusterViewProps) {
 }
 
 function StatCard({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4">
-      <div className="text-xs uppercase tracking-wide text-[#6b7280]">{label}</div>
-      <div className="mt-1 text-lg text-white">{children}</div>
-    </div>
-  )
+  return <div className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4"><div className="text-xs uppercase tracking-wide text-[#6b7280]">{label}</div><div className="mt-1 text-lg text-white">{children}</div></div>
 }
 
-function StateDot({ state }: { state: string }) {
-  const colors: Record<string, string> = {
-    healthy: "bg-emerald-400 text-emerald-300",
-    recovering: "bg-sky-400 text-sky-300",
-    suspect: "bg-yellow-400 text-yellow-300",
-    unavailable: "bg-red-500 text-red-300",
-    unknown: "bg-gray-400 text-gray-300",
-  }
-  const cls = colors[state] ?? "bg-gray-400 text-gray-300"
-  const [dot, text] = cls.split(" ")
-  return (
-    <span className={`inline-flex items-center gap-2 text-xs ${text}`}>
-      <span className={`h-2 w-2 rounded-full ${dot}`} />
-      {state}
-    </span>
-  )
-}
-
-// Keep configured peers visible without inventing a recovery state when the
-// reporting node has not supplied an observation for them.
 function fillMissing(membership: PeerStatus[], peers: string[], selfId: string): PeerStatus[] {
-  const byId = new Map(membership.map((m) => [m.id, m]))
-  const out: PeerStatus[] = []
-  const seen = new Set<string>()
-  for (const id of peers) {
-    if (byId.has(id)) {
-      out.push(byId.get(id)!)
-    } else {
-      out.push({ id, address: "—", state: id === selfId ? "healthy" : "unknown" })
-    }
-    seen.add(id)
-  }
-  for (const m of membership) {
-    if (!seen.has(m.id)) out.push(m)
-  }
-  if (out.length === 0) {
-    out.push({ id: selfId, address: "—", state: "healthy" })
-  }
-  return out
-}
-
-function writeModeLabel(mode: string): string {
-  if (mode === "strong") return "synchronous"
-  if (mode === "async") return "asynchronous"
-  return mode || "—"
+  const byId = new Map(membership.map((member) => [member.id, member]))
+  return peers.map((id) => byId.get(id) ?? { id, address: "—", state: id === selfId ? "healthy" : "unknown" })
 }

@@ -20,8 +20,9 @@ export function Chapter01() {
       <H2>The trade-offs you accept</H2>
       <UL>
         <li>
-          <strong>Volatility.</strong> MnemoKV has no persistence, so process loss removes local data.
-          Replication can provide another in-memory copy but is not disk durability.
+          <strong>Volatility.</strong> MnemoKV can periodically persist JSON or binary snapshots,
+          but it has no write-ahead log, so writes after the latest snapshot can still be lost.
+          Replication provides another in-memory copy rather than independent disk durability.
         </li>
         <li>
           <strong>Size limit.</strong> Capacity depends on the machine and workload. Sharding is one

@@ -16,6 +16,9 @@ Commands must behave predictably and compatibly with `redis-cli`. Locking semant
 - Wrong-type operations return `WRONGTYPE Operation against a key holding the wrong kind of value`.
 - Operating on a missing key returns the type-appropriate empty result (nil bulk for `GET`, `0` for counters, etc.).
 - Lazy expiration: any read or write that touches an expired key first deletes it and treats it as missing.
+- Integer arguments use canonical signed base-10 syntax: `0` or a non-zero value without a plus
+  sign or leading zeros. Negative zero is rejected.
+- Relative expiration arithmetic rejects multiplication or timestamp overflow rather than wrapping.
 
 ### Per-command semantics (baseline)
 
@@ -26,6 +29,8 @@ Commands must behave predictably and compatibly with `redis-cli`. Locking semant
   - `NX` sets only if the key is absent; `XX` only if present.
   - Returns `OK` on success, nil bulk if `NX`/`XX` conditions fail.
   - A successful `SET` without `KEEPTTL` clears any previous TTL. (Baseline does not implement `KEEPTTL`.)
+  - The existence condition and write occur atomically under the owning stripe lock.
+  - At most one expiration option is accepted; repeated or conflicting `EX`/`PX` is a syntax error.
 - `GET key` — returns the string value, nil bulk if missing or wrong type. Wrong type returns `WRONGTYPE`.
 - `INCR key`
   - If missing, treats current value as `0`.
@@ -45,5 +50,12 @@ Commands must behave predictably and compatibly with `redis-cli`. Locking semant
 - `COMMAND [DOCS ...]` — returns an empty array. This is enough for `redis-cli` to start interactively.
 - `CLIENT ...` — returns `OK`. Sufficient for `redis-cli` `CLIENT SETNAME` and `CLIENT GETNAME` probes.
 - `QUIT` — returns `OK`, then closes the connection.
+- `QUIT`, `FLUSHDB`, and `FLUSHALL` reject extra arguments. An invalid `QUIT` does not close the connection.
+
+### Sorted-set validation
+
+- `ZADD` rejects `NaN` because it has no total ordering. Positive and negative infinity are valid scores.
+- Duplicate members in one `ZADD` are processed in order and count as newly added at most once.
+- `ZRANGE` accepts exactly `key start stop` or the same arguments followed by `WITHSCORES`.
 
 Unknown commands return `ERR unknown command '<name>'`.

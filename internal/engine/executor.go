@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"strings"
+
 	"github.com/mnemokv/mnemokv/internal/resp"
 )
 
@@ -27,6 +29,9 @@ func (x *Executor) Execute(cmd *resp.Command) resp.Frame {
 	case "ECHO":
 		return x.cmdEcho(cmd)
 	case "QUIT":
+		if len(cmd.Args) != 0 {
+			return wrongArgs("quit")
+		}
 		// QUIT's "close the connection after replying" behaviour is enforced by
 		// the connection loop; here we just produce the OK reply.
 		return resp.OK
@@ -41,6 +46,9 @@ func (x *Executor) Execute(cmd *resp.Command) resp.Frame {
 		// to plain RESP2.
 		return resp.NewError("ERR", "HELLO not supported (RESP2 only)")
 	case "FLUSHDB", "FLUSHALL":
+		if len(cmd.Args) != 0 {
+			return wrongArgs(strings.ToLower(cmd.Name))
+		}
 		x.store.Flush()
 		return resp.OK
 

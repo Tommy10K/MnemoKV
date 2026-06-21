@@ -11,22 +11,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/mnemokv/mnemokv/internal/config"
-	"github.com/mnemokv/mnemokv/internal/engine"
+	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
 	"github.com/mnemokv/mnemokv/internal/resp"
 )
 
+type CommandExecutor interface {
+	Execute(*resp.Command) resp.Frame
+}
+
 // Server accepts RESP2 connections and dispatches commands to the engine.
 type Server struct {
-	cfg     config.NetworkConfig
-	engine  *engine.Engine
-	metrics metrics.Sink
+	cfg      config.NetworkConfig
+	executor CommandExecutor
+	metrics  metrics.Sink
 
 	listener net.Listener
 	wg       sync.WaitGroup
@@ -37,15 +40,15 @@ type Server struct {
 }
 
 // New builds a Server. The caller is responsible for constructing the engine.
-func New(cfg config.NetworkConfig, eng *engine.Engine, sink metrics.Sink) *Server {
+func New(cfg config.NetworkConfig, executor CommandExecutor, sink metrics.Sink) *Server {
 	if sink == nil {
 		sink = metrics.NewNoop()
 	}
 	return &Server{
-		cfg:     cfg,
-		engine:  eng,
-		metrics: sink,
-		conns:   make(map[net.Conn]struct{}),
+		cfg:      cfg,
+		executor: executor,
+		metrics:  sink,
+		conns:    make(map[net.Conn]struct{}),
 	}
 }
 
@@ -58,7 +61,7 @@ func (s *Server) Start(ctx context.Context) error {
 		return fmt.Errorf("server: listen %s: %w", addr, err)
 	}
 	s.listener = ln
-	log.Printf("server: listening on %s", addr)
+	logging.Infof("server: listening on %s", addr)
 
 	// Close the listener when the context is cancelled. The accept loop will
 	// then exit with a "use of closed connection" error which we map to nil.
@@ -78,11 +81,16 @@ func (s *Server) Start(ctx context.Context) error {
 			if errors.As(err, &ne) && ne.Timeout() {
 				continue
 			}
-			log.Printf("server: accept error: %v", err)
+			logging.Warnf("server: accept error: %v", err)
 			time.Sleep(20 * time.Millisecond)
 			continue
 		}
-		s.trackConn(conn)
+		if !s.tryTrackConn(conn) {
+			s.metrics.IncCounter("connections.rejected")
+			_ = writeMaxConnectionsError(conn)
+			_ = conn.Close()
+			continue
+		}
 		s.wg.Add(1)
 		go s.serveConn(conn)
 	}
@@ -126,10 +134,14 @@ func (s *Server) isClosing() bool {
 	return s.closing
 }
 
-func (s *Server) trackConn(conn net.Conn) {
+func (s *Server) tryTrackConn(conn net.Conn) bool {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cfg.MaxConnections > 0 && len(s.conns) >= s.cfg.MaxConnections {
+		return false
+	}
 	s.conns[conn] = struct{}{}
-	s.mu.Unlock()
+	return true
 }
 
 func (s *Server) untrackConn(conn net.Conn) {
@@ -146,12 +158,26 @@ func (s *Server) closeAllConns() {
 	s.mu.Unlock()
 }
 
+func (s *Server) activeConns() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.conns)
+}
+
+func writeMaxConnectionsError(conn net.Conn) error {
+	writer := resp.NewWriterSize(conn, 256)
+	if err := writer.WriteFrame(resp.NewError("ERR", "max connections reached")); err != nil {
+		return err
+	}
+	return writer.Flush()
+}
+
 // serveConn drives one client connection until it ends or the server stops.
 func (s *Server) serveConn(conn net.Conn) {
 	defer s.wg.Done()
 	defer s.untrackConn(conn)
 
-	h := newConnectionHandler(conn, s.engine, s.metrics, s.cfg)
+	h := newConnectionHandler(conn, s.executor, s.metrics, s.cfg)
 	h.serve()
 }
 
