@@ -26,7 +26,7 @@ export function HomePage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-[#6b7280]">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-[#8b949e]">
           What it does
         </h2>
         <ul className="grid grid-cols-1 gap-2 text-sm text-[#e6edf3] md:grid-cols-2">

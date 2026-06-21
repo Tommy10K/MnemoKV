@@ -21,14 +21,14 @@ export function LinkedListVisual() {
         <Button onClick={() => setItems((xs) => xs.slice(0, -1))} disabled={items.length === 0}>
           RPOP
         </Button>
-        <span className="ml-auto text-[#6b7280]">length = {items.length}</span>
+        <span className="ml-auto text-[#8b949e]">length = {items.length}</span>
       </div>
 
       <div className="overflow-x-auto pb-2">
         <div className="flex min-w-fit items-center gap-1 px-1">
           <Endpoint label="HEAD" />
           {items.length === 0 ? (
-            <div className="rounded border border-dashed border-[#1f2937] px-3 py-2 text-xs text-[#6b7280]">
+            <div className="rounded border border-dashed border-[#1f2937] px-3 py-2 text-xs text-[#8b949e]">
               empty list
             </div>
           ) : (
@@ -68,7 +68,7 @@ function Arrow({ active }: { active: boolean }) {
 
 function Endpoint({ label }: { label: string }) {
   return (
-    <span className="rounded border border-[#1f2937] bg-[#0d1117] px-2 py-1 text-[10px] uppercase tracking-wide text-[#6b7280]">
+    <span className="rounded border border-[#1f2937] bg-[#0d1117] px-2 py-1 text-[10px] uppercase tracking-wide text-[#8b949e]">
       {label}
     </span>
   )

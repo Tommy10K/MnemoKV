@@ -113,7 +113,7 @@ export function StripingVisual({ stripeCount = 8 }: Props) {
           )
         })}
 
-        <text x="225" y="212" fill="#6b7280" fontSize="10">
+        <text x="225" y="212" fill="#8b949e" fontSize="10">
           one lock per stripe — independent stripes run in parallel
         </text>
       </svg>

@@ -1,0 +1,12 @@
+goos: windows
+goarch: amd64
+pkg: github.com/mnemokv/mnemokv/internal/engine
+cpu: demo-reference
+BenchmarkSET-8          2100000    565.0 ns/op    184 B/op    7 allocs/op
+BenchmarkGET-8          5100000    232.0 ns/op     64 B/op    3 allocs/op
+BenchmarkINCR-8         1750000    688.0 ns/op    216 B/op    9 allocs/op
+BenchmarkLPUSH-8        1450000    824.0 ns/op    256 B/op   10 allocs/op
+BenchmarkLPOP-8         1900000    631.0 ns/op    144 B/op    6 allocs/op
+BenchmarkZADD-8          720000   1685.0 ns/op    496 B/op   15 allocs/op
+BenchmarkZRANGE-8        860000   1392.0 ns/op    624 B/op   18 allocs/op
+BenchmarkZSCORE-8       2800000    427.0 ns/op     96 B/op    4 allocs/op

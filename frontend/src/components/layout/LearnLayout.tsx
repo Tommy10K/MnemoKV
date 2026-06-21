@@ -4,7 +4,7 @@ import { chapters } from "@/pages/learn/chapters"
 export function LearnLayout() {
   return (
     <div className="grid grid-cols-1 gap-8 md:grid-cols-[240px_1fr]">
-      <aside className="md:sticky md:top-6 md:self-start">
+      <aside aria-label="Learning chapters" className="md:sticky md:top-6 md:self-start">
         <NavLink
           to="/learn"
           end
@@ -32,7 +32,7 @@ export function LearnLayout() {
                   ].join(" ")
                 }
               >
-                <span className="mr-2 text-[#6b7280]">{String(index + 1).padStart(2, "0")}</span>
+                <span className="mr-2 text-[#8b949e]">{String(index + 1).padStart(2, "0")}</span>
                 {chapter.title}
               </NavLink>
             </li>

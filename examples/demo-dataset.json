@@ -1,0 +1,14 @@
+{
+  "description": "Deterministic MnemoKV presentation dataset",
+  "commands": [
+    ["FLUSHDB"],
+    ["SET", "demo:greeting", "hello from MnemoKV"],
+    ["SET", "demo:session", "active", "EX", "3600"],
+    ["SET", "demo:visits", "41"],
+    ["INCR", "demo:visits"],
+    ["RPUSH", "demo:queue", "ingest", "index", "replicate"],
+    ["LPUSH", "demo:recent", "snapshot", "cluster", "standalone"],
+    ["ZADD", "demo:leaderboard", "120", "alice", "300", "bob", "200", "carol"],
+    ["SET", "demo:large-value", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]
+  ]
+}

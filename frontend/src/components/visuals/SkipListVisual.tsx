@@ -80,10 +80,10 @@ function Row({
 }) {
   return (
     <div className="flex items-center gap-1">
-      <span className="w-12 shrink-0 text-right font-mono text-[10px] text-[#6b7280]">
+      <span className="w-12 shrink-0 text-right font-mono text-[10px] text-[#8b949e]">
         L{level}
       </span>
-      <span className="rounded border border-[#1f2937] bg-[#0d1117] px-2 py-1 font-mono text-[11px] text-[#6b7280]">
+      <span className="rounded border border-[#1f2937] bg-[#0d1117] px-2 py-1 font-mono text-[11px] text-[#8b949e]">
         head
       </span>
       {nodes.map((n, i) => {

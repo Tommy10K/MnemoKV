@@ -11,6 +11,9 @@ planning/
 *.dylib
 bin/
 dist/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.npm-cache/
 results/
 data/
 

@@ -16,6 +16,7 @@ standalone RESP2 server and a small fixed-slot cluster with a React dashboard an
 - Fixed-slot proxy routing through any node, with same-slot multi-key enforcement.
 - Ordered synchronous replication to one replica and explicit manual failover/repair.
 - Synthetic string, list, sorted-set, and mixed workload profiles.
+- Runtime-validated React UI with accessible charts, responsive layouts, and Edge end-to-end tests.
 
 MnemoKV is teaching-grade software, not a production Redis replacement. Snapshot persistence is
 not a write-ahead log: writes after the latest snapshot can be lost.
@@ -63,7 +64,7 @@ Keep the backend running, then start Vite in another terminal:
 
 ```powershell
 Set-Location frontend
-npm.cmd install
+npm.cmd ci
 npm.cmd run dev
 ```
 
@@ -74,6 +75,9 @@ Vite.
 Useful routes include `/use/dashboard`, `/use/console`, `/use/workloads`, `/use/eviction`, and the
 learning chapters under `/learn`.
 
+The UI validates HTTP and SSE response shapes, distinguishes malformed data from an offline node,
+and includes a built-in benchmark example.
+
 ## Repeatable standalone demos
 
 With `configs/standalone.yaml` running, exercise strings, TTLs, lists, sorted sets, malformed RESP,
@@ -82,6 +86,14 @@ a deterministic mixed workload, and metrics:
 ```powershell
 ./scripts/demo-standalone.ps1
 ```
+
+Load and verify deterministic presentation data for the dashboard and console:
+
+```powershell
+./scripts/load-demo-dataset.ps1
+```
+
+The source dataset is `examples/demo-dataset.json`.
 
 For a 512-byte dataset limit, start the low-memory preset and run the policy demo in another
 terminal. It first proves `noeviction` rejection preserves existing keys, then switches to LRU and
@@ -175,11 +187,15 @@ go test -race ./...
 go vet ./...
 
 Set-Location frontend
+npm.cmd ci
 npm.cmd run lint
 npm.cmd run build
+npm.cmd run test:e2e
 ```
 
-Focused end-to-end coverage lives in `test/integration` for RESP and `test/api` for HTTP behavior.
+Focused backend coverage lives in `test/integration` for RESP and `test/api` for HTTP behavior. The
+frontend Edge suite starts isolated backend/frontend processes and covers live, offline, malformed,
+responsive, keyboard, reduced-motion, and WCAG A/AA flows.
 
 ## Repository layout
 

@@ -15,7 +15,7 @@ export function ChapterPage({ chapter }: ChapterPageProps) {
   return (
     <article className="flex flex-col gap-8">
       <header className="flex flex-col gap-2 border-b border-[#1f2937] pb-6">
-        <span className="text-xs uppercase tracking-wider text-[#6b7280]">
+        <span className="text-xs uppercase tracking-wider text-[#8b949e]">
           Chapter {String(index + 1).padStart(2, "0")}
         </span>
         <h1 className="text-3xl font-semibold tracking-tight text-white">{chapter.title}</h1>
@@ -32,7 +32,7 @@ export function ChapterPage({ chapter }: ChapterPageProps) {
             to={`/learn/${prev.slug}`}
             className="flex flex-col text-[#9ca3af] hover:text-white"
           >
-            <span className="text-xs uppercase tracking-wider text-[#6b7280]">← Previous</span>
+            <span className="text-xs uppercase tracking-wider text-[#8b949e]">← Previous</span>
             <span>{prev.title}</span>
           </Link>
         ) : (
@@ -43,7 +43,7 @@ export function ChapterPage({ chapter }: ChapterPageProps) {
             to={`/learn/${next.slug}`}
             className="flex flex-col text-right text-[#9ca3af] hover:text-white"
           >
-            <span className="text-xs uppercase tracking-wider text-[#6b7280]">Next →</span>
+            <span className="text-xs uppercase tracking-wider text-[#8b949e]">Next →</span>
             <span>{next.title}</span>
           </Link>
         ) : (

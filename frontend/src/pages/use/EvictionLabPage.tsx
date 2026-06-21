@@ -26,8 +26,8 @@ type Switch = {
 
 export function EvictionLabPage() {
   const baseUrl = useAppStore((s) => s.apiBaseUrl)
-  const health = useNodeStatus()
-  const { status, latest, memory } = useNodeEvents()
+  const { health, error: healthError } = useNodeStatus()
+  const { status, latest, memory, error: eventsError } = useNodeEvents()
   const [engine, setEngine] = useState<EngineStateResponse | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -91,11 +91,15 @@ export function EvictionLabPage() {
 
       {offline ? (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
-          Node at <span className="font-mono">{baseUrl}</span> is unreachable. Start a node or
-          change the API target above.
+          {healthError?.includes("unexpected response") ? (
+            healthError
+          ) : (
+            <>Node at <span className="font-mono">{baseUrl}</span> is unreachable. Start a node or change the API target above.</>
+          )}
         </div>
       ) : (
         <>
+          {eventsError ? <p role="alert" className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">{eventsError}</p> : null}
           <section className="grid gap-4 sm:grid-cols-3">
             <Card label="Current policy">
               <div className="font-mono text-2xl uppercase text-emerald-300">{current}</div>
@@ -145,6 +149,7 @@ export function EvictionLabPage() {
                     type="button"
                     onClick={() => switchTo(p.id)}
                     disabled={active || busy !== null}
+                    aria-pressed={active}
                     className={[
                       "rounded-md border p-3 text-left transition-colors",
                       active
@@ -175,13 +180,13 @@ export function EvictionLabPage() {
 
           <section className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4">
             <h2 className="mb-3 text-sm font-semibold text-white">Memory over time</h2>
-            <TimeSeriesChart data={memory} dataKey="used" format={formatBytes} />
+            <TimeSeriesChart ariaLabel="Memory usage while testing eviction policies" data={memory} dataKey="used" format={formatBytes} />
           </section>
 
           <section className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4">
             <h2 className="mb-3 text-sm font-semibold text-white">Switches this session</h2>
             {history.length === 0 ? (
-              <p className="text-xs text-[#6b7280]">No switches yet — pick a policy above.</p>
+              <p className="text-xs text-[#8b949e]">No switches yet — pick a policy above.</p>
             ) : (
               <ol className="space-y-1 text-xs">
                 {history.map((s, i) => (
@@ -192,8 +197,8 @@ export function EvictionLabPage() {
                     <span className="font-mono text-[#9ca3af]">
                       {new Date(s.at).toLocaleTimeString()}
                     </span>
-                    <span className="font-mono uppercase text-[#6b7280]">{s.from}</span>
-                    <span className="text-[#6b7280]">→</span>
+                    <span className="font-mono uppercase text-[#8b949e]">{s.from}</span>
+                    <span className="text-[#8b949e]">→</span>
                     <span className="font-mono uppercase text-emerald-300">{s.to}</span>
                   </li>
                 ))}
@@ -224,7 +229,7 @@ export function EvictionLabPage() {
 function Card({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4">
-      <div className="text-xs uppercase tracking-wide text-[#6b7280]">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-[#8b949e]">{label}</div>
       <div className="mt-2">{children}</div>
     </div>
   )

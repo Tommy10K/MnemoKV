@@ -19,13 +19,14 @@ type Props = {
   format?: (value: number) => string
   height?: number
   yLabel?: string
+  ariaLabel: string
 }
 
-export function BarChart({ data, format, height = 320, yLabel }: Props) {
+export function BarChart({ data, format, height = 320, yLabel, ariaLabel }: Props) {
   if (data.length === 0) {
     return (
       <div
-        className="flex items-center justify-center rounded-md border border-dashed border-[#1f2937] text-sm text-[#6b7280]"
+        className="flex items-center justify-center rounded-md border border-dashed border-[#1f2937] text-sm text-[#8b949e]"
         style={{ height }}
       >
         no data
@@ -34,8 +35,8 @@ export function BarChart({ data, format, height = 320, yLabel }: Props) {
   }
 
   return (
-    <div style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="min-w-0" role="img" aria-label={ariaLabel} style={{ height }}>
+      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
         <RechartsBarChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 32 }}>
           <XAxis
             dataKey="name"
@@ -51,7 +52,7 @@ export function BarChart({ data, format, height = 320, yLabel }: Props) {
             width={70}
             label={
               yLabel
-                ? { value: yLabel, angle: -90, position: "insideLeft", fill: "#6b7280", fontSize: 11 }
+                ? { value: yLabel, angle: -90, position: "insideLeft", fill: "#8b949e", fontSize: 11 }
                 : undefined
             }
           />
@@ -72,6 +73,9 @@ export function BarChart({ data, format, height = 320, yLabel }: Props) {
           </Bar>
         </RechartsBarChart>
       </ResponsiveContainer>
+      <span className="sr-only">
+        {data.map((row) => `${row.name}: ${format ? format(row.value) : row.value}`).join("; ")}
+      </span>
     </div>
   )
 }

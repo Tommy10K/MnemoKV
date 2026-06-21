@@ -83,10 +83,13 @@ export function CommandConsolePage() {
 
       <div
         ref={outputRef}
+        role="log"
+        aria-live="polite"
+        aria-label="Command results"
         className="h-[420px] overflow-y-auto rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4 font-mono text-sm"
       >
         {entries.length === 0 ? (
-          <div className="text-[#6b7280]">No commands yet.</div>
+          <div className="text-[#8b949e]">No commands yet.</div>
         ) : (
           entries.map((entry, i) => <EntryRow key={i} entry={entry} />)
         )}
@@ -95,6 +98,8 @@ export function CommandConsolePage() {
       <div className="flex items-center gap-2 rounded-lg border border-[#1f2937] bg-[#0b0f17] px-3 py-2">
         <span className="select-none font-mono text-emerald-400">{">"}</span>
         <input
+          id="command-input"
+          aria-label="RESP command"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKey}
@@ -107,6 +112,7 @@ export function CommandConsolePage() {
           type="button"
           onClick={submit}
           disabled={busy || input.trim() === ""}
+          aria-label="Send command"
           className="rounded-md bg-emerald-500/20 px-3 py-1 text-sm text-emerald-300 hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-50"
         >
           send
@@ -124,9 +130,9 @@ function EntryRow({ entry }: { entry: Entry }) {
         {entry.input}
       </div>
       {entry.error !== undefined ? (
-        <div className="pl-4 text-red-400">network error: {entry.error}</div>
+        <div role="alert" className="pl-4 text-red-400">command failed: {entry.error}</div>
       ) : entry.result === undefined ? (
-        <div className="pl-4 text-[#6b7280]">…</div>
+        <div className="pl-4 text-[#8b949e]">…</div>
       ) : (
         <div className="pl-4">{renderResult(entry.result)}</div>
       )}
@@ -145,9 +151,9 @@ function renderResult(r: CommandResult): React.ReactNode {
     case "bulk":
       return <span className="text-[#e6edf3]">"{r.value}"</span>
     case "nil":
-      return <span className="text-[#6b7280]">(nil)</span>
+      return <span className="text-[#8b949e]">(nil)</span>
     case "array":
-      if (r.value.length === 0) return <span className="text-[#6b7280]">(empty array)</span>
+      if (r.value.length === 0) return <span className="text-[#8b949e]">(empty array)</span>
       return (
         <ol className="list-decimal pl-5">
           {r.value.map((item, i) => (

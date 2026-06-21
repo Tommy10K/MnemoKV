@@ -20,7 +20,7 @@ export function LearnLanding() {
               to={`/learn/${chapter.slug}`}
               className="flex items-start gap-4 rounded-md border border-[#1f2937] bg-[#0b0f17] p-4 transition-colors hover:border-emerald-500/40 hover:bg-[#111722]"
             >
-              <span className="mono shrink-0 text-sm text-[#6b7280]">
+              <span className="mono shrink-0 text-sm text-[#8b949e]">
                 {String(index + 1).padStart(2, "0")}
               </span>
               <div className="flex flex-col gap-1">

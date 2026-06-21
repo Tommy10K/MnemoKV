@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "pretest:e2e": "node ./scripts/build-e2e-backend.mjs",
+    "test:e2e": "node ./scripts/run-e2e.mjs",
+    "test:e2e:headed": "node ./scripts/run-e2e.mjs --headed"
   },
   "dependencies": {
     "@xyflow/react": "^12.10.2",
@@ -19,7 +22,9 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.0",
     "@tailwindcss/postcss": "^4.3.0",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",

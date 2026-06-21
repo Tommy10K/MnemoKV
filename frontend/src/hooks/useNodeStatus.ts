@@ -9,6 +9,7 @@ import { useAppStore } from "@/store/appStore"
 export function useNodeStatus(intervalMs = 5000) {
   const baseUrl = useAppStore((s) => s.apiBaseUrl)
   const [health, setHealth] = useState<HealthResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -17,9 +18,15 @@ export function useNodeStatus(intervalMs = 5000) {
     async function poll() {
       try {
         const data = await getHealth(controller.signal)
-        if (!cancelled) setHealth(data)
-      } catch {
-        if (!cancelled) setHealth(null)
+        if (!cancelled) {
+          setHealth(data)
+          setError(null)
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setHealth(null)
+          setError(cause instanceof Error ? cause.message : String(cause))
+        }
       }
     }
 
@@ -32,5 +39,5 @@ export function useNodeStatus(intervalMs = 5000) {
     }
   }, [baseUrl, intervalMs])
 
-  return health
+  return { health, error }
 }
