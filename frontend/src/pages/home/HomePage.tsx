@@ -5,9 +5,9 @@ const features = [
   "Strings, lists, sorted sets with O(1) and O(log n) operations",
   "Lock striping for concurrent access",
   "Memory limits with FIFO, LRU, LFU, and Random eviction",
-  "Consistent-hash ring and cluster observability prototype",
-  "Async and synchronous write fan-out experiments",
-  "Heartbeat-based membership and failover observations",
+  "Fixed-slot cluster routing through any node",
+  "Synchronous leader-to-replica write acknowledgement",
+  "Manual failover, full-shard repair, and stale-node fencing",
 ]
 
 export function HomePage() {
@@ -19,9 +19,9 @@ export function HomePage() {
           An educational in-memory distributed key-value store written in Go. Built to teach the
           algorithms, data structures, and trade-offs that production systems rely on.
         </p>
-        <p className="max-w-2xl rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
-          Standalone mode is the stable lab. Cluster mode is an experimental prototype and does
-          not yet provide authoritative routing, consensus, or safe automatic failover.
+        <p className="max-w-2xl rounded-md border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-200">
+          Standalone mode, snapshots, and the fixed-slot cluster path share the same command
+          engine. Cluster failover is deliberately manual rather than consensus-based.
         </p>
       </section>
 

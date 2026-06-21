@@ -82,8 +82,8 @@ export const chapters: Chapter[] = [
   },
   {
     slug: "failover",
-    title: "Failover & Leader Election",
-    summary: "Terms, control plane, stale-leader fencing, automatic recovery.",
+    title: "Manual Failover & Repair",
+    summary: "Terms, stale-leader fencing, replica assignment, and full-slot recovery.",
     body: Chapter11,
   },
   {

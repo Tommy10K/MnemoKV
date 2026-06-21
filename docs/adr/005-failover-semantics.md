@@ -2,12 +2,17 @@
 
 ## Status
 
-Accepted as forward direction. Not exercised by the baseline milestone.
+Accepted and implemented.
 
 ## Decision
 
-- Leadership is tracked by an authoritative control plane keyed by slot or shard with a monotonically increasing term.
-- Gossip provides health hints but is not the source of truth for leader changes.
-- During an election: writes for the affected slot pause and return `CLUSTERDOWN leader unavailable`; reads may continue against the last-known leader if the configured read mode allows stale reads, otherwise they pause as well.
-- After election, the previous leader is fenced by term comparison: any write attempt at an older term is rejected.
-- Recovered nodes rejoin as followers and must catch up via the replication queue before serving reads in strong mode.
+Failover is manual. Membership heartbeats provide health hints but never elect a leader.
+
+For an unavailable leader, an operator promotes the assigned replica, which advances the slot
+term and removes the old replica assignment. The operator then assigns a replacement replica and
+performs a full-slot snapshot synchronization. Writes remain unavailable until that replica is
+ready. Metadata changes advance a cluster-wide version and are broadcast to peers.
+
+Returning nodes load persisted metadata and fetch newer metadata from healthy peers before serving
+cluster traffic. Newer metadata versions and slot terms fence stale leaders. There is no automatic
+election, quorum metadata plane, automatic rebalancing, or stale-read mode.

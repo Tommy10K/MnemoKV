@@ -9,8 +9,9 @@ standalone and clustered nodes has focused coverage for conditional writes, expi
 integer handling, sorted-set validation, concurrent reads, malformed RESP input, and utility
 command arity.
 
-Standalone mode is the stable product path. Cluster mode remains an experimental prototype:
-useful components exist, but they do not yet form one authoritative distributed write path.
+Standalone mode, snapshots, and the fixed-slot cluster path are implemented. Cluster mode now has
+one authoritative metadata and command path with proxy routing, ordered synchronous replication,
+manual failover, persisted metadata, and full-slot repair.
 
 This file is the execution plan for the next backend phase. Treat unchecked items as decided work
 unless they are explicitly marked as future work.
@@ -400,38 +401,38 @@ nodes.
 
 #### Cluster implementation checklist
 
-- [ ] Replace separate ring and slot-leader ownership with one fixed-slot metadata model.
-- [ ] Add `slotCount`, `routingMode: proxy`, and `failoverMode: manual` to config.
-- [ ] Remove user-facing async/sync write-safety choices from the target cluster design.
-- [ ] Make each node compute identical slot leadership and replica assignment from the peer list.
-- [ ] Store and expose cluster metadata version, slot term, leader, replica, and local role.
-- [ ] Put a command coordinator in front of both RESP and HTTP command execution.
-- [ ] Implement proxy routing to the slot leader for single-key commands.
-- [ ] Reject multi-key commands whose keys map to different slots.
-- [ ] Add ordered synchronous replication with slot, term, source, and sequence.
-- [ ] Reject writes when the slot leader is unavailable.
-- [ ] Reject writes when the slot replica is unavailable and replication is enabled.
-- [ ] Add manual admin operations through both `adminctl` and the HTTP admin API for cluster status,
+- [x] Replace separate ring and slot-leader ownership with one fixed-slot metadata model.
+- [x] Add `slotCount`, `routingMode: proxy`, and `failoverMode: manual` to config.
+- [x] Remove user-facing async/sync write-safety choices from the target cluster design.
+- [x] Make each node compute identical slot leadership and replica assignment from the peer list.
+- [x] Store and expose cluster metadata version, slot term, leader, replica, and local role.
+- [x] Put a command coordinator in front of both RESP and HTTP command execution.
+- [x] Implement proxy routing to the slot leader for single-key commands.
+- [x] Reject multi-key commands whose keys map to different slots.
+- [x] Add ordered synchronous replication with slot, term, source, and sequence.
+- [x] Reject writes when the slot leader is unavailable.
+- [x] Reject writes when the slot replica is unavailable and replication is enabled.
+- [x] Add manual admin operations through both `adminctl` and the HTTP admin API for cluster status,
   leader promotion, replica assignment, and replica sync.
-- [ ] Persist cluster metadata and node snapshots.
-- [ ] Implement snapshot codecs for both JSON and binary.
-- [ ] Implement full shard snapshot transfer for replica repair and node rejoin.
-- [ ] Ensure leader-chosen eviction decisions replicate as explicit deletes.
+- [x] Persist cluster metadata and node snapshots.
+- [x] Implement snapshot codecs for both JSON and binary.
+- [x] Implement full shard snapshot transfer for replica repair and node rejoin.
+- [x] Ensure leader-chosen eviction decisions replicate as explicit deletes.
 
 #### Cluster acceptance tests
 
-- [ ] Every node computes the same slot map from the same peer list.
-- [ ] A client can connect to any node and successfully write a key through proxy routing.
-- [ ] The same key has one authoritative leader regardless of entry node.
-- [ ] Multi-key commands across slots return a `CROSSSLOT`-style error.
-- [ ] A write returns OK only after the replica acknowledges it.
-- [ ] A leader failure makes its slots unavailable until manual promotion.
-- [ ] A replica failure makes affected leader slots reject writes until repair.
-- [ ] Manual promotion increments term and fences the old leader when it returns.
-- [ ] Replica assignment plus full shard snapshot repair restores write availability.
-- [ ] Restart from JSON and binary snapshots restores the same dataset.
-- [ ] Rejoining stale nodes do not serve old leadership terms.
-- [ ] Cluster-mode eviction produces the same key set on leader and replica.
+- [x] Every node computes the same slot map from the same peer list.
+- [x] A client can connect to any node and successfully write a key through proxy routing.
+- [x] The same key has one authoritative leader regardless of entry node.
+- [x] Multi-key commands across slots return a `CROSSSLOT`-style error.
+- [x] A write returns OK only after the replica acknowledges it.
+- [x] A leader failure makes its slots unavailable until manual promotion.
+- [x] A replica failure makes affected leader slots reject writes until repair.
+- [x] Manual promotion increments term and fences the old leader when it returns.
+- [x] Replica assignment plus full shard snapshot repair restores write availability.
+- [x] Restart from JSON and binary snapshots restores the same dataset.
+- [x] Rejoining stale nodes do not serve old leadership terms.
+- [x] Cluster-mode eviction produces the same key set on leader and replica.
 
 ## Frontend
 
@@ -440,7 +441,7 @@ nodes.
 - [x] Repaired dependency metadata so `npm ci`, lint, and build pass.
 - [x] Added a persisted API target selector and direct Configure-to-Dashboard link.
 - [x] Corrected node startup commands and eviction/noeviction guidance.
-- [x] Marked cluster behavior as experimental and local to the reporting node.
+- [x] Kept cluster behavior claims aligned with the implemented backend milestone.
 - [x] Replaced invented `recovering` states with `unknown` when observations are missing.
 - [x] Corrected learning chapters to distinguish theory from current implementation.
 - [x] Added route-level lazy loading and removed the oversized initial-chunk warning.
@@ -452,7 +453,7 @@ nodes.
 - [ ] Review responsive layout at laptop and projector sizes.
 - [ ] Complete keyboard, focus, label, contrast, chart, and reduced-motion accessibility checks.
 - [ ] Add a built-in benchmark example and a reproducible demo dataset.
-- [ ] Keep cluster wording synchronized with each backend milestone rather than updating claims ahead of behavior.
+- [x] Keep cluster wording synchronized with each backend milestone rather than updating claims ahead of behavior.
 
 ## Final Verification
 

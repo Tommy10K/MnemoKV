@@ -1,8 +1,7 @@
 # MnemoKV
 
-MnemoKV is an educational, observable in-memory key/value store written in Go. Its stable path is
-a standalone RESP2 server with a React dashboard and learning UI. Cluster components are included
-for experimentation, but distributed routing and failover are not yet a reliable product path.
+MnemoKV is an educational, observable in-memory key/value store written in Go. It supports a
+standalone RESP2 server and a small fixed-slot cluster with a React dashboard and learning UI.
 
 ## What works
 
@@ -14,6 +13,8 @@ for experimentation, but distributed routing and failover are not yet a reliable
 - Hard accounted-memory limits with `noeviction`, FIFO, LRU, LFU, and random policies.
 - Health, engine, metrics, cluster-state, command, event-stream, eviction-policy, and snapshot APIs.
 - JSON and binary snapshots with checksums, atomic replacement, retention, and startup restore.
+- Fixed-slot proxy routing through any node, with same-slot multi-key enforcement.
+- Ordered synchronous replication to one replica and explicit manual failover/repair.
 - Synthetic string, list, sorted-set, and mixed workload profiles.
 
 MnemoKV is teaching-grade software, not a production Redis replacement. Snapshot persistence is
@@ -111,6 +112,28 @@ retention, and startup restore. Trigger a snapshot on any persistence-enabled no
 go run ./cmd/adminctl -host 127.0.0.1 -port 7380 snapshot
 ```
 
+## Run the cluster
+
+The checked-in three-node cluster listens on RESP ports `6381`–`6383` and API ports `7381`–`7383`.
+On Windows, the repeatable demo builds and starts isolated nodes, verifies identical metadata,
+any-node routing, strict replica acknowledgement, and cross-slot rejection, then cleans up:
+
+```powershell
+./scripts/demo-cluster.ps1
+```
+
+Manual operations use the API of a node with the current metadata. For example:
+
+```powershell
+./bin/mnemokv-adminctl.exe -port 7382 cluster
+./bin/mnemokv-adminctl.exe -port 7382 cluster-promote 42
+./bin/mnemokv-adminctl.exe -port 7382 cluster-assign-replica 42 node-3
+./bin/mnemokv-adminctl.exe -port 7382 cluster-sync 42 node-3
+```
+
+Promotion, replica assignment, and full-slot synchronization are separate by design. Writes remain
+unavailable for an affected slot until its replacement replica is synchronized.
+
 ## Build command-line tools
 
 PowerShell:
@@ -131,11 +154,14 @@ GNU Make environments can use `make build`, `make test`, `make race`, and `make 
 | `GET` | `/health` | Node health and identity |
 | `GET` | `/engine/state` | Memory and eviction state |
 | `GET` | `/metrics/summary` | Command and eviction counters |
-| `GET` | `/cluster/state` | Local experimental cluster view |
+| `GET` | `/cluster/state` | Authoritative metadata, slot roles, terms, sequences, and membership hints |
 | `GET` | `/events` | Server-sent observability snapshots |
 | `POST` | `/commands` | Execute one command from JSON arguments |
 | `POST` | `/engine/eviction-policy` | Change the active eviction policy |
 | `POST` | `/admin/snapshot` | Write a manual snapshot |
+| `POST` | `/cluster/promote` | Promote an assigned slot replica |
+| `POST` | `/cluster/replica` | Assign a replacement slot replica |
+| `POST` | `/cluster/sync` | Transfer a full slot snapshot to its assigned replica |
 
 JSON request bodies are limited to 1 MiB, reject unknown/trailing values, and return method errors
 with an `Allow` header. The black-box API smoke test also verifies clean client failure after the
@@ -159,10 +185,10 @@ Focused end-to-end coverage lives in `test/integration` for RESP and `test/api` 
 
 ```text
 cmd/                  node, workload, and adminctl binaries
-configs/              standalone, demo, and experimental cluster YAML files
+configs/              standalone, persistence, and cluster YAML files
 frontend/             React/Vite learning and observability UI
 internal/api/         HTTP API and SSE
-internal/cluster/     experimental routing, replication, membership, and failover pieces
+internal/cluster/     fixed-slot metadata, routing, replication, membership, failover, and repair
 internal/config/      YAML model, defaults, and validation
 internal/engine/      striped store, commands, memory accounting, and eviction
 internal/persistence/ snapshot lifecycle, retention, and restore
@@ -174,6 +200,5 @@ scripts/              demos and operational helpers
 test/                 black-box integration scenarios
 ```
 
-The three-node files under `configs/cluster-node-*.yaml` are for exploring the current prototype.
-Do not rely on them for authoritative sharding, synchronous replication, or safe automatic
-failover until the remaining cluster checklist is implemented.
+Cluster mode deliberately omits automatic failover, consensus, online rebalancing, and a
+write-ahead log. It is designed and tested for two to five local educational nodes.

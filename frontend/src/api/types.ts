@@ -26,11 +26,25 @@ export type PeerStatus = {
 export type ClusterStateResponse = {
   enabled: boolean
   nodeId: string
-  writeMode: string
-  autoFailover: boolean
-  term?: number
+  clusterId?: string
+  slotCount?: number
+  metadataVersion?: number
+  routingMode?: string
+  failoverMode?: string
   peers: string[]
   membership?: PeerStatus[]
+  slots?: SlotStatus[]
+}
+
+export type SlotStatus = {
+  number: number
+  leaderId: string
+  replicaId?: string
+  localRole: "leader" | "replica" | "none"
+  term: number
+  lastSequence: number
+  lastAppliedSequence: number
+  replicaReady: boolean
 }
 
 export type NodeEvent = {

@@ -2,15 +2,18 @@
 
 ## Status
 
-Accepted as forward direction. Not exercised by the baseline milestone.
+Accepted and implemented.
 
 ## Decision
 
-Two write-safety modes will be supported when clustering is enabled:
+Cluster writes use one fixed synchronous contract. Each slot has one leader and one assigned
+replica. The leader validates admission, sends an ordered replication record to that replica, and
+mutates locally only after the replica acknowledges application. If either owner is unavailable,
+the write is rejected.
 
-- **async** — leader executes locally, acknowledges the client, then enqueues replication. A client-acknowledged write may be lost if the leader fails before the record is shipped.
-- **strong** — leader waits for follower acknowledgements according to the configured quorum (or for control-plane commit) before acknowledging the client.
+Records carry source leader ID, slot, term, sequence, and command payload. A follower accepts only
+its current leader and term, applies the next sequence, treats duplicates idempotently, and rejects
+gaps or stale records. Gaps are repaired by a full shard snapshot.
 
-In both modes, follower apply paths must validate the source term/epoch and reject writes from a stale leader.
-
-The baseline milestone exposes `cluster.writeSafetyMode` in configuration but does not exercise either path because clustering is not active yet.
+An OK response means the mutation exists in memory on the leader and replica. It does not imply
+disk durability or quorum consensus. Durability remains bounded by snapshot frequency.

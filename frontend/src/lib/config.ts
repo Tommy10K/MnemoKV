@@ -1,10 +1,10 @@
 export type Mode = "standalone" | "clustered"
 export type EvictionPolicy = "noeviction" | "fifo" | "lru" | "lfu" | "random"
-export type WriteSafety = "async" | "strong"
 
 export type Peer = {
   id: string
   address: string
+  apiAddress: string
 }
 
 export type NodeConfig = {
@@ -18,10 +18,10 @@ export type NodeConfig = {
   stripeCount: number
   memoryLimitBytes: number
   evictionPolicy: EvictionPolicy
+  clusterId: string
   shardingEnabled: boolean
   replicationEnabled: boolean
-  autoFailover: boolean
-  writeSafetyMode: WriteSafety
+  slotCount: number
   peers: Peer[]
 }
 
@@ -37,10 +37,10 @@ export function defaultStandalone(): NodeConfig {
     stripeCount: 32,
     memoryLimitBytes: 0,
     evictionPolicy: "lru",
+    clusterId: "demo-cluster",
     shardingEnabled: false,
     replicationEnabled: false,
-    autoFailover: false,
-    writeSafetyMode: "async",
+    slotCount: 1024,
     peers: [],
   }
 }
@@ -49,6 +49,7 @@ export function defaultClusterPeers(count: number): Peer[] {
   return Array.from({ length: count }, (_, i) => ({
     id: `node-${i + 1}`,
     address: `127.0.0.1:${6381 + i}`,
+    apiAddress: `127.0.0.1:${7381 + i}`,
   }))
 }
 
@@ -72,20 +73,33 @@ export function configToYaml(c: NodeConfig): string {
   lines.push(`  evictionPolicy: ${c.evictionPolicy}`)
   lines.push("")
   lines.push("cluster:")
+  if (c.mode === "clustered") {
+    lines.push(`  id: ${c.clusterId}`)
+  }
   lines.push(`  enabled: ${c.mode === "clustered"}`)
-  lines.push(`  shardingEnabled: ${c.shardingEnabled}`)
-  lines.push(`  replicationEnabled: ${c.replicationEnabled}`)
-  lines.push(`  autoFailover: ${c.autoFailover}`)
-  lines.push(`  writeSafetyMode: ${c.writeSafetyMode}`)
-  if (c.mode === "clustered" && c.peers.length > 0) {
+  lines.push(`  shardingEnabled: ${c.mode === "clustered"}`)
+  lines.push(`  replicationEnabled: ${c.mode === "clustered" && c.replicationEnabled}`)
+  if (c.mode === "clustered") {
+    lines.push(`  slotCount: ${c.slotCount}`)
+    lines.push("  routingMode: proxy")
+    lines.push("  failoverMode: manual")
     lines.push("  peers:")
-    for (const p of c.peers) {
-      lines.push(`    - id: ${p.id}`)
-      lines.push(`      address: ${p.address}`)
+    for (const peer of c.peers) {
+      lines.push(`    - id: ${peer.id}`)
+      lines.push(`      address: ${peer.address}`)
+      lines.push(`      apiAddress: ${peer.apiAddress}`)
     }
   } else {
     lines.push("  peers: []")
   }
+  lines.push("")
+  lines.push("persistence:")
+  lines.push(`  enabled: ${c.mode === "clustered"}`)
+  lines.push(`  dataDir: ${c.dataDir}`)
+  lines.push("  snapshotIntervalSec: 60")
+  lines.push("  maxSnapshots: 5")
+  lines.push("  loadOnStart: true")
+  lines.push("  format: json")
   lines.push("")
   lines.push("observability:")
   lines.push(`  apiBindAddr: ${c.apiBindAddr}`)
@@ -95,10 +109,7 @@ export function configToYaml(c: NodeConfig): string {
   return lines.join("\n")
 }
 
-export type ValidationError = {
-  field: string
-  message: string
-}
+export type ValidationError = { field: string; message: string }
 
 export function validate(c: NodeConfig): ValidationError[] {
   const errors: ValidationError[] = []
@@ -108,15 +119,22 @@ export function validate(c: NodeConfig): ValidationError[] {
   if (c.port === c.apiPort) errors.push({ field: "apiPort", message: "API port must differ from RESP port" })
   if (c.stripeCount < 1) errors.push({ field: "stripeCount", message: "Stripe count must be at least 1" })
   if (c.memoryLimitBytes < 0) errors.push({ field: "memoryLimitBytes", message: "Memory limit cannot be negative" })
-  if (c.autoFailover && !c.replicationEnabled) {
-    errors.push({ field: "autoFailover", message: "Auto-failover requires replication" })
-  }
   if (c.mode === "clustered") {
-    if (c.peers.length < 2) {
-      errors.push({ field: "peers", message: "A cluster needs at least 2 peers" })
+    if (!c.clusterId.trim()) errors.push({ field: "clusterId", message: "Cluster id is required" })
+    if (c.slotCount < 1 || c.slotCount > 65536) errors.push({ field: "slotCount", message: "Slot count must be 1-65536" })
+    if (c.peers.length < 2 || c.peers.length > 5) errors.push({ field: "peers", message: "A cluster needs 2-5 peers" })
+    if (!c.peers.some((peer) => peer.id === c.id)) errors.push({ field: "peers", message: "This node's id must appear in the peer list" })
+    if (c.peers.some((peer) => !peer.id.trim() || !peer.address.trim() || !peer.apiAddress.trim())) {
+      errors.push({ field: "peers", message: "Every peer needs id, RESP address, and API address" })
     }
-    if (!c.peers.some((p) => p.id === c.id)) {
-      errors.push({ field: "peers", message: "This node's id must appear in the peer list" })
+    if (new Set(c.peers.map((peer) => peer.id)).size !== c.peers.length) {
+      errors.push({ field: "peers", message: "Peer ids must be unique" })
+    }
+    if (new Set(c.peers.map((peer) => peer.address)).size !== c.peers.length) {
+      errors.push({ field: "peers", message: "Peer RESP addresses must be unique" })
+    }
+    if (new Set(c.peers.map((peer) => peer.apiAddress)).size !== c.peers.length) {
+      errors.push({ field: "peers", message: "Peer API addresses must be unique" })
     }
   }
   return errors

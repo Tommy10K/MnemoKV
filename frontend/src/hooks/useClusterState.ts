@@ -3,22 +3,21 @@ import { getClusterState } from "@/api/client"
 import type { ClusterStateResponse } from "@/api/types"
 import { useAppStore } from "@/store/appStore"
 
-export type TermChange = { at: number; term: number }
+export type MetadataChange = { at: number; version: number }
 
-// useClusterState polls /cluster/state on an interval and tracks the history
-// of term changes locally so the page can show a failover timeline without
-// any server-side log.
+// Poll the reporting node and retain recent authoritative metadata-version
+// changes so manual topology operations are visible in the UI.
 export function useClusterState(intervalMs = 1500) {
   const baseUrl = useAppStore((s) => s.apiBaseUrl)
   const [state, setState] = useState<ClusterStateResponse | null>(null)
   const [reachable, setReachable] = useState(true)
-  const [termHistory, setTermHistory] = useState<TermChange[]>([])
-  const lastTermRef = useRef<number | null>(null)
+  const [metadataHistory, setMetadataHistory] = useState<MetadataChange[]>([])
+  const lastVersionRef = useRef<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
     const ctrl = new AbortController()
-    lastTermRef.current = null
+    lastVersionRef.current = null
     let first = true
 
     async function poll() {
@@ -27,19 +26,17 @@ export function useClusterState(intervalMs = 1500) {
         if (cancelled) return
         if (first) {
           first = false
-          setTermHistory([])
+          setMetadataHistory([])
         }
         setReachable(true)
         setState(data)
-        const term = data.term ?? 0
-        if (lastTermRef.current === null) {
-          lastTermRef.current = term
-          if (term > 0) {
-            setTermHistory([{ at: Date.now(), term }])
-          }
-        } else if (term !== lastTermRef.current) {
-          lastTermRef.current = term
-          setTermHistory((prev) => [...prev, { at: Date.now(), term }].slice(-20))
+        const version = data.metadataVersion ?? 0
+        if (lastVersionRef.current === null) {
+          lastVersionRef.current = version
+          if (version > 0) setMetadataHistory([{ at: Date.now(), version }])
+        } else if (version !== lastVersionRef.current) {
+          lastVersionRef.current = version
+          setMetadataHistory((prev) => [...prev, { at: Date.now(), version }].slice(-20))
         }
       } catch {
         if (!cancelled) setReachable(false)
@@ -55,5 +52,5 @@ export function useClusterState(intervalMs = 1500) {
     }
   }, [baseUrl, intervalMs])
 
-  return { state, reachable, termHistory }
+  return { state, reachable, metadataHistory }
 }
