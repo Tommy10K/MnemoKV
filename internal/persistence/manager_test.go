@@ -133,7 +133,11 @@ func TestSnapshotIncludesClusterMetadata(t *testing.T) {
 	provider := func() snapshot.ClusterMetadata {
 		return snapshot.ClusterMetadata{
 			ClusterID: "cluster-1", SlotCount: 2, MetadataVersion: 4,
-			Slots: []snapshot.Slot{{Number: 0, Role: "leader", Term: 3, LastAppliedSequence: 8}, {Number: 1, Role: "replica", Term: 4, LastAppliedSequence: 9}},
+			Peers: []snapshot.Peer{{ID: "node-1", Address: "127.0.0.1:6381", APIAddress: "127.0.0.1:7381"}, {ID: "node-2", Address: "127.0.0.1:6382", APIAddress: "127.0.0.1:7382"}},
+			Slots: []snapshot.Slot{
+				{Number: 0, Role: "leader", LeaderID: "node-1", ReplicaID: "node-2", Term: 3, LastSequence: 8, LastAppliedSequence: 8, ReplicaReady: true},
+				{Number: 1, Role: "replica", LeaderID: "node-2", ReplicaID: "node-1", Term: 4, LastSequence: 9, LastAppliedSequence: 9, ReplicaReady: true},
+			},
 		}
 	}
 	result, err := New(cfg, "node-1", testDataset(t), provider).Snapshot()
@@ -149,8 +153,37 @@ func TestSnapshotIncludesClusterMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if model.ClusterID != "cluster-1" || model.SlotCount != 2 || model.MetadataVersion != 4 || len(model.Slots) != 2 {
+	if model.ClusterID != "cluster-1" || model.SlotCount != 2 || model.MetadataVersion != 4 || len(model.Peers) != 2 || len(model.Slots) != 2 {
 		t.Fatalf("cluster metadata missing: %+v", model)
+	}
+}
+
+func TestClusterMetadataRestoresWithBothCodecs(t *testing.T) {
+	want := snapshot.ClusterMetadata{
+		ClusterID: "cluster-restore", SlotCount: 1, MetadataVersion: 7,
+		Peers: []snapshot.Peer{{ID: "node-1", Address: "127.0.0.1:6381", APIAddress: "127.0.0.1:7381"}, {ID: "node-2", Address: "127.0.0.1:6382", APIAddress: "127.0.0.1:7382"}},
+		Slots: []snapshot.Slot{{Number: 0, Role: "leader", LeaderID: "node-1", ReplicaID: "node-2", Term: 5, LastSequence: 12, LastAppliedSequence: 12, ReplicaReady: true}},
+	}
+	for _, format := range []string{snapshot.FormatJSON, snapshot.FormatBinary} {
+		t.Run(format, func(t *testing.T) {
+			cfg := testPersistenceConfig(t.TempDir(), format)
+			writer := New(cfg, "node-1", testDataset(t), func() snapshot.ClusterMetadata { return want })
+			if _, err := writer.Snapshot(); err != nil {
+				t.Fatal(err)
+			}
+			reader := New(cfg, "node-1", engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noeviction"}), nil)
+			var restored snapshot.ClusterMetadata
+			reader.SetMetadataRestorer(func(meta snapshot.ClusterMetadata) error {
+				restored = meta
+				return nil
+			})
+			if _, err := reader.RestoreLatest(); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(restored, want) {
+				t.Fatalf("restored metadata = %+v, want %+v", restored, want)
+			}
+		})
 	}
 }
 

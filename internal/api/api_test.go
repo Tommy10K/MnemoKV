@@ -174,6 +174,9 @@ func TestPostHandlersRejectWrongMethods(t *testing.T) {
 		{"/commands", s.handleCommands},
 		{"/engine/eviction-policy", s.handleEvictionPolicy},
 		{"/admin/snapshot", s.handleSnapshot},
+		{"/cluster/promote", s.handleClusterPromote},
+		{"/cluster/replica", s.handleClusterReplica},
+		{"/cluster/sync", s.handleClusterSync},
 	}
 	for _, tc := range cases {
 		req := httptest.NewRequest(http.MethodGet, tc.path, nil)

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -79,9 +80,16 @@ func (p *RESPProxy) SendReplication(ctx context.Context, nodeID string, rec Repl
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 
-	_ = pc.c.SetDeadline(time.Now().Add(p.timeout))
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = pc.c.SetDeadline(deadline)
+	} else {
+		_ = pc.c.SetDeadline(time.Now().Add(p.timeout))
+	}
 
-	args := append([]string{"REPLICATE", strconv.FormatUint(rec.Sequence, 10)}, rec.Args...)
+	args := append([]string{
+		"REPLICATE", rec.SourceNodeID, strconv.FormatUint(uint64(rec.Slot), 10),
+		strconv.FormatUint(rec.Term, 10), strconv.FormatUint(rec.Sequence, 10),
+	}, rec.Args...)
 	if err := writeRequest(pc.w, args); err != nil {
 		p.dropConn(nodeID)
 		return err
@@ -90,9 +98,19 @@ func (p *RESPProxy) SendReplication(ctx context.Context, nodeID string, rec Repl
 		p.dropConn(nodeID)
 		return err
 	}
-	if _, err := readFrame(pc.r); err != nil {
+	frame, err := readFrame(pc.r)
+	if err != nil {
 		p.dropConn(nodeID)
 		return err
+	}
+	if frameErr, ok := frame.(resp.Error); ok {
+		if strings.Contains(frameErr.Message, ErrSequenceGap.Error()) {
+			return fmt.Errorf("%w: replica %s rejected record", ErrSequenceGap, nodeID)
+		}
+		if strings.Contains(frameErr.Message, ErrStaleTerm.Error()) {
+			return fmt.Errorf("%w: replica %s rejected record", ErrStaleTerm, nodeID)
+		}
+		return fmt.Errorf("replica %s rejected record: %s %s", nodeID, frameErr.Prefix, frameErr.Message)
 	}
 	return nil
 }
@@ -160,7 +178,12 @@ func readFrame(r *bufio.Reader) (resp.Frame, error) {
 	case '+':
 		return resp.SimpleString(body), nil
 	case '-':
-		return resp.NewError("ERR", body), nil
+		parts := strings.SplitN(body, " ", 2)
+		message := ""
+		if len(parts) == 2 {
+			message = parts[1]
+		}
+		return resp.NewError(parts[0], message), nil
 	case ':':
 		n, err := strconv.ParseInt(body, 10, 64)
 		if err != nil {

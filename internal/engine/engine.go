@@ -51,11 +51,18 @@ func (e *Engine) SetWriteHook(hook WriteHook, sync bool) {
 	e.hookSync = sync
 }
 
-func (e *Engine) Execute(cmd *resp.Command) resp.Frame {
-	if cmd.Name == "REPLICATE" {
-		return e.applyReplicated(cmd)
-	}
+// ApplyReplicated executes a leader-approved mutation without invoking local
+// admission or write hooks. The leader has already chosen any eviction
+// deletes and the follower must reproduce that exact command stream.
+func (e *Engine) ApplyReplicated(cmd *resp.Command) resp.Frame {
+	start := time.Now()
+	frame := e.executor.Execute(cmd)
+	e.metrics.ObserveLatency("cmd.replicated."+strings.ToLower(cmd.Name), time.Since(start))
+	e.metrics.IncCounter("replication.applied")
+	return frame
+}
 
+func (e *Engine) Execute(cmd *resp.Command) resp.Frame {
 	start := time.Now()
 	var frame resp.Frame
 	if IsWriteCommand(cmd.Name) {
@@ -66,17 +73,6 @@ func (e *Engine) Execute(cmd *resp.Command) resp.Frame {
 	e.metrics.ObserveLatency("cmd."+strings.ToLower(cmd.Name), time.Since(start))
 	e.metrics.IncCounter("cmd.total")
 	return frame
-}
-
-func (e *Engine) applyReplicated(cmd *resp.Command) resp.Frame {
-	if len(cmd.Args) < 2 {
-		return resp.NewError("ERR", "REPLICATE requires sequence and command")
-	}
-	inner := &resp.Command{
-		Name: strings.ToUpper(string(cmd.Args[1])),
-		Args: cmd.Args[2:],
-	}
-	return e.executor.Execute(inner)
 }
 
 func isErrorFrame(f resp.Frame) bool {

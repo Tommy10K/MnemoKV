@@ -13,10 +13,15 @@ import (
 	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
 	"github.com/mnemokv/mnemokv/internal/persistence"
+	"github.com/mnemokv/mnemokv/internal/resp"
 )
 
 type Snapshotter interface {
 	Snapshot() (persistence.Result, error)
+}
+
+type CommandExecutor interface {
+	Execute(*resp.Command) resp.Frame
 }
 
 type Server struct {
@@ -24,6 +29,7 @@ type Server struct {
 	node      config.NodeConfig
 	cluster   config.ClusterConfig
 	engine    *engine.Engine
+	executor  CommandExecutor
 	metrics   *metrics.InMemory
 	cluMgr    *cluster.Manager
 	snapshots Snapshotter
@@ -32,11 +38,16 @@ type Server struct {
 }
 
 func New(cfg config.ObservabilityConfig, node config.NodeConfig, clusterCfg config.ClusterConfig, eng *engine.Engine, sink *metrics.InMemory, cluMgr *cluster.Manager, snapshots Snapshotter) *Server {
+	executor := CommandExecutor(eng)
+	if cluMgr != nil && cluMgr.Enabled() && cluMgr.Coordinator() != nil {
+		executor = cluMgr.Coordinator()
+	}
 	return &Server{
 		cfg:       cfg,
 		node:      node,
 		cluster:   clusterCfg,
 		engine:    eng,
+		executor:  executor,
 		metrics:   sink,
 		cluMgr:    cluMgr,
 		snapshots: snapshots,

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/mnemokv/mnemokv/internal/config"
-	"github.com/mnemokv/mnemokv/internal/engine"
 	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
 	"github.com/mnemokv/mnemokv/internal/resp"
@@ -18,24 +17,24 @@ import (
 // writes responses. A new handler is created per connection so its parser,
 // writer, and read buffer never cross goroutine boundaries.
 type connectionHandler struct {
-	conn   net.Conn
-	reader *bufio.Reader
-	writer *resp.Writer
-	parser *resp.Parser
-	engine *engine.Engine
-	sink   metrics.Sink
-	cfg    config.NetworkConfig
+	conn     net.Conn
+	reader   *bufio.Reader
+	writer   *resp.Writer
+	parser   *resp.Parser
+	executor CommandExecutor
+	sink     metrics.Sink
+	cfg      config.NetworkConfig
 }
 
-func newConnectionHandler(conn net.Conn, eng *engine.Engine, sink metrics.Sink, cfg config.NetworkConfig) *connectionHandler {
+func newConnectionHandler(conn net.Conn, executor CommandExecutor, sink metrics.Sink, cfg config.NetworkConfig) *connectionHandler {
 	return &connectionHandler{
-		conn:   conn,
-		reader: bufio.NewReaderSize(conn, 32*1024),
-		writer: resp.NewWriterSize(conn, 32*1024),
-		parser: resp.NewParser(),
-		engine: eng,
-		sink:   sink,
-		cfg:    cfg,
+		conn:     conn,
+		reader:   bufio.NewReaderSize(conn, 32*1024),
+		writer:   resp.NewWriterSize(conn, 32*1024),
+		parser:   resp.NewParser(),
+		executor: executor,
+		sink:     sink,
+		cfg:      cfg,
 	}
 }
 
@@ -60,7 +59,7 @@ func (h *connectionHandler) serve() {
 		}
 
 		start := time.Now()
-		frame := h.engine.Execute(cmd)
+		frame := h.executor.Execute(cmd)
 		h.sink.ObserveLatency("command_latency", time.Since(start), cmd.Name)
 
 		quit := cmd.Name == "QUIT" && len(cmd.Args) == 0

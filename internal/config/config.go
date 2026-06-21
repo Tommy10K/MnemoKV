@@ -39,16 +39,15 @@ type EngineConfig struct {
 	EvictionPolicy   string `yaml:"evictionPolicy"`
 }
 
-// ClusterConfig describes the cluster topology and write-safety choices.
-// The baseline milestone accepts these fields but only exercises them once
-// the cluster phases land.
+// ClusterConfig describes the fixed-slot cluster topology.
 type ClusterConfig struct {
 	ID                 string       `yaml:"id"`
 	Enabled            bool         `yaml:"enabled"`
 	ShardingEnabled    bool         `yaml:"shardingEnabled"`
 	ReplicationEnabled bool         `yaml:"replicationEnabled"`
-	AutoFailover       bool         `yaml:"autoFailover"`
-	WriteSafetyMode    string       `yaml:"writeSafetyMode"`
+	SlotCount          uint32       `yaml:"slotCount"`
+	RoutingMode        string       `yaml:"routingMode"`
+	FailoverMode       string       `yaml:"failoverMode"`
 	Peers              []PeerConfig `yaml:"peers"`
 }
 
@@ -64,8 +63,9 @@ type PersistenceConfig struct {
 
 // PeerConfig identifies one peer in a static cluster definition.
 type PeerConfig struct {
-	ID      string `yaml:"id"`
-	Address string `yaml:"address"`
+	ID         string `yaml:"id"`
+	Address    string `yaml:"address"`
+	APIAddress string `yaml:"apiAddress"`
 }
 
 // ObservabilityConfig governs the HTTP API and logging.
@@ -75,8 +75,7 @@ type ObservabilityConfig struct {
 	LogLevel    string `yaml:"logLevel"`
 }
 
-// IsStandalone reports whether the node is configured to run without cluster
-// coordination. This is the only mode the baseline milestone executes.
+// IsStandalone reports whether the node runs without cluster coordination.
 func (c *Config) IsStandalone() bool { return !c.Cluster.Enabled }
 
 // IsClustered reports whether any cluster coordination is enabled.

@@ -27,6 +27,7 @@ type Model struct {
 	CreatedAt       time.Time `json:"createdAt"`
 	SlotCount       uint32    `json:"slotCount,omitempty"`
 	MetadataVersion uint64    `json:"metadataVersion,omitempty"`
+	Peers           []Peer    `json:"peers,omitempty"`
 	Slots           []Slot    `json:"slots,omitempty"`
 	Entries         []Entry   `json:"entries"`
 	Checksum        string    `json:"checksum"`
@@ -38,15 +39,26 @@ type ClusterMetadata struct {
 	ClusterID       string
 	SlotCount       uint32
 	MetadataVersion uint64
+	Peers           []Peer
 	Slots           []Slot
+}
+
+type Peer struct {
+	ID         string `json:"id"`
+	Address    string `json:"address"`
+	APIAddress string `json:"apiAddress"`
 }
 
 // Slot captures the local node's durable view of one cluster slot.
 type Slot struct {
 	Number              uint32 `json:"number"`
 	Role                string `json:"role"`
+	LeaderID            string `json:"leaderId,omitempty"`
+	ReplicaID           string `json:"replicaId,omitempty"`
 	Term                uint64 `json:"term"`
+	LastSequence        uint64 `json:"lastSequence,omitempty"`
 	LastAppliedSequence uint64 `json:"lastAppliedSequence"`
+	ReplicaReady        bool   `json:"replicaReady,omitempty"`
 }
 
 // Entry contains one engine value in a type-specific byte representation.
@@ -137,8 +149,10 @@ func (m *Model) expectedChecksum() string {
 	canonical.Checksum = ""
 	canonical.CreatedAt = canonical.CreatedAt.UTC()
 	canonical.Entries = append([]Entry(nil), m.Entries...)
+	canonical.Peers = append([]Peer(nil), m.Peers...)
 	canonical.Slots = append([]Slot(nil), m.Slots...)
 	sort.Slice(canonical.Entries, func(i, j int) bool { return canonical.Entries[i].Key < canonical.Entries[j].Key })
+	sort.Slice(canonical.Peers, func(i, j int) bool { return canonical.Peers[i].ID < canonical.Peers[j].ID })
 	sort.Slice(canonical.Slots, func(i, j int) bool { return canonical.Slots[i].Number < canonical.Slots[j].Number })
 	raw, _ := json.Marshal(canonical)
 	sum := sha256.Sum256(raw)

@@ -7,6 +7,6 @@ type Node struct {
 
 type Route struct {
 	OwnerNodeID string
-	Slot        uint16
+	Slot        uint32
 	IsLocal     bool
 }

@@ -24,6 +24,7 @@ var (
 )
 
 type MetadataProvider func() snapshot.ClusterMetadata
+type MetadataRestorer func(snapshot.ClusterMetadata) error
 
 type Result struct {
 	Path       string    `json:"path"`
@@ -39,11 +40,12 @@ type RestoreResult struct {
 }
 
 type Manager struct {
-	cfg      config.PersistenceConfig
-	nodeID   string
-	engine   *engine.Engine
-	metadata MetadataProvider
-	now      func() time.Time
+	cfg             config.PersistenceConfig
+	nodeID          string
+	engine          *engine.Engine
+	metadata        MetadataProvider
+	restoreMetadata MetadataRestorer
+	now             func() time.Time
 
 	mu sync.Mutex
 	wg sync.WaitGroup
@@ -51,6 +53,12 @@ type Manager struct {
 
 func New(cfg config.PersistenceConfig, nodeID string, eng *engine.Engine, metadata MetadataProvider) *Manager {
 	return &Manager{cfg: cfg, nodeID: nodeID, engine: eng, metadata: metadata, now: time.Now}
+}
+
+func (m *Manager) SetMetadataRestorer(restorer MetadataRestorer) {
+	m.mu.Lock()
+	m.restoreMetadata = restorer
+	m.mu.Unlock()
 }
 
 // Snapshot writes one atomic snapshot and applies valid-snapshot retention.
@@ -81,6 +89,7 @@ func (m *Manager) Snapshot() (Result, error) {
 		model.ClusterID = meta.ClusterID
 		model.SlotCount = meta.SlotCount
 		model.MetadataVersion = meta.MetadataVersion
+		model.Peers = append([]snapshot.Peer(nil), meta.Peers...)
 		model.Slots = append([]snapshot.Slot(nil), meta.Slots...)
 	}
 	if err := model.Seal(); err != nil {
@@ -127,6 +136,16 @@ func (m *Manager) RestoreLatest() (RestoreResult, error) {
 		return RestoreResult{}, fmt.Errorf("no valid snapshot found among %d files: %w", candidateCount, lastErr)
 	}
 	latest := valid[0]
+	if m.restoreMetadata != nil {
+		meta := snapshot.ClusterMetadata{
+			ClusterID: latest.model.ClusterID, SlotCount: latest.model.SlotCount,
+			MetadataVersion: latest.model.MetadataVersion, Peers: append([]snapshot.Peer(nil), latest.model.Peers...),
+			Slots: append([]snapshot.Slot(nil), latest.model.Slots...),
+		}
+		if err := m.restoreMetadata(meta); err != nil {
+			return RestoreResult{}, fmt.Errorf("restore snapshot metadata %q: %w", latest.path, err)
+		}
+	}
 	restored, err := m.engine.RestoreSnapshotEntries(latest.model.Entries, m.now())
 	if err != nil {
 		return RestoreResult{}, fmt.Errorf("restore snapshot %q: %w", latest.path, err)

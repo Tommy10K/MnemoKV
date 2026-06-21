@@ -16,17 +16,20 @@ import (
 	"time"
 
 	"github.com/mnemokv/mnemokv/internal/config"
-	"github.com/mnemokv/mnemokv/internal/engine"
 	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
 	"github.com/mnemokv/mnemokv/internal/resp"
 )
 
+type CommandExecutor interface {
+	Execute(*resp.Command) resp.Frame
+}
+
 // Server accepts RESP2 connections and dispatches commands to the engine.
 type Server struct {
-	cfg     config.NetworkConfig
-	engine  *engine.Engine
-	metrics metrics.Sink
+	cfg      config.NetworkConfig
+	executor CommandExecutor
+	metrics  metrics.Sink
 
 	listener net.Listener
 	wg       sync.WaitGroup
@@ -37,15 +40,15 @@ type Server struct {
 }
 
 // New builds a Server. The caller is responsible for constructing the engine.
-func New(cfg config.NetworkConfig, eng *engine.Engine, sink metrics.Sink) *Server {
+func New(cfg config.NetworkConfig, executor CommandExecutor, sink metrics.Sink) *Server {
 	if sink == nil {
 		sink = metrics.NewNoop()
 	}
 	return &Server{
-		cfg:     cfg,
-		engine:  eng,
-		metrics: sink,
-		conns:   make(map[net.Conn]struct{}),
+		cfg:      cfg,
+		executor: executor,
+		metrics:  sink,
+		conns:    make(map[net.Conn]struct{}),
 	}
 }
 
@@ -174,7 +177,7 @@ func (s *Server) serveConn(conn net.Conn) {
 	defer s.wg.Done()
 	defer s.untrackConn(conn)
 
-	h := newConnectionHandler(conn, s.engine, s.metrics, s.cfg)
+	h := newConnectionHandler(conn, s.executor, s.metrics, s.cfg)
 	h.serve()
 }
 

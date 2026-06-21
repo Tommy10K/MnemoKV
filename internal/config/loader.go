@@ -1,7 +1,9 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -16,7 +18,16 @@ func Load(path string) (*Config, error) {
 	}
 
 	cfg := defaults()
-	if err := yaml.Unmarshal(raw, cfg); err != nil {
+	dec := yaml.NewDecoder(bytes.NewReader(raw))
+	dec.KnownFields(true)
+	if err := dec.Decode(cfg); err != nil {
+		return nil, fmt.Errorf("config: parse %q: %w", path, err)
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("config: parse %q: multiple YAML documents are not supported", path)
+		}
 		return nil, fmt.Errorf("config: parse %q: %w", path, err)
 	}
 
@@ -49,9 +60,7 @@ func defaults() *Config {
 			MemoryLimitBytes: 0,
 			EvictionPolicy:   "lru",
 		},
-		Cluster: ClusterConfig{
-			WriteSafetyMode: "async",
-		},
+		Cluster: ClusterConfig{SlotCount: 1024, RoutingMode: "proxy", FailoverMode: "manual"},
 		Persistence: PersistenceConfig{
 			SnapshotIntervalSec: 60,
 			MaxSnapshots:        5,
@@ -73,8 +82,14 @@ func (c *Config) applyFallbacks() {
 	if c.Engine.EvictionPolicy == "" {
 		c.Engine.EvictionPolicy = "noeviction"
 	}
-	if c.Cluster.WriteSafetyMode == "" {
-		c.Cluster.WriteSafetyMode = "async"
+	if c.Cluster.SlotCount == 0 {
+		c.Cluster.SlotCount = 1024
+	}
+	if c.Cluster.RoutingMode == "" {
+		c.Cluster.RoutingMode = "proxy"
+	}
+	if c.Cluster.FailoverMode == "" {
+		c.Cluster.FailoverMode = "manual"
 	}
 	if c.Persistence.DataDir == "" {
 		c.Persistence.DataDir = c.Node.DataDir

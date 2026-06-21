@@ -53,8 +53,10 @@ func (s *Server) handleClusterState(w http.ResponseWriter, r *http.Request) {
 	resp := ClusterStateResponse{
 		Enabled:      s.cluster.Enabled,
 		NodeID:       s.node.ID,
-		WriteMode:    s.cluster.WriteSafetyMode,
-		AutoFailover: s.cluster.AutoFailover,
+		ClusterID:    s.cluster.ID,
+		SlotCount:    s.cluster.SlotCount,
+		RoutingMode:  s.cluster.RoutingMode,
+		FailoverMode: s.cluster.FailoverMode,
 	}
 	for _, p := range s.cluster.Peers {
 		resp.Peers = append(resp.Peers, p.ID)
@@ -67,8 +69,13 @@ func (s *Server) handleClusterState(w http.ResponseWriter, r *http.Request) {
 				State:   m.State,
 			})
 		}
-		if cp := s.cluMgr.ControlPlane(); cp != nil {
-			resp.Term = cp.CurrentTerm()
+		if metadata := s.cluMgr.Metadata(); metadata != nil {
+			state := metadata.Snapshot()
+			resp.MetadataVersion = state.Version
+			resp.Slots = make([]SlotStatus, len(state.Slots))
+			for i, slot := range state.Slots {
+				resp.Slots[i] = slotStatus(metadata, slot)
+			}
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)

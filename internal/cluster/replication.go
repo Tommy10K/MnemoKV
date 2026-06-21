@@ -4,7 +4,7 @@ import "time"
 
 type ReplicationRecord struct {
 	SourceNodeID string
-	Slot         uint16
+	Slot         uint32
 	Term         uint64
 	Sequence     uint64
 	Args         []string

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -60,7 +61,7 @@ func TestValidatePersistence(t *testing.T) {
 		Node:        NodeConfig{ID: "n", DataDir: "./data"},
 		Network:     NetworkConfig{Port: 6380, MaxConnections: 10},
 		Engine:      EngineConfig{StripeCount: 8, EvictionPolicy: "lru"},
-		Cluster:     ClusterConfig{WriteSafetyMode: "async"},
+		Cluster:     ClusterConfig{},
 		Persistence: PersistenceConfig{Enabled: true, DataDir: "./data", SnapshotIntervalSec: 1, MaxSnapshots: 1, Format: "BINARY"},
 	}
 	if err := base.Validate(); err != nil {
@@ -90,21 +91,14 @@ func TestLoadCluster(t *testing.T) {
 	}
 }
 
-func TestValidateRejectsAutoFailoverWithoutReplication(t *testing.T) {
-	c := &Config{
-		Node:    NodeConfig{ID: "n"},
-		Network: NetworkConfig{Port: 6380, MaxConnections: 10},
-		Engine:  EngineConfig{StripeCount: 8, EvictionPolicy: "lru"},
-		Cluster: ClusterConfig{
-			Enabled:         true,
-			ShardingEnabled: true,
-			AutoFailover:    true,
-			WriteSafetyMode: "async",
-			Peers:           []PeerConfig{{ID: "n", Address: "127.0.0.1:1"}},
-		},
+func TestLoadRejectsRemovedClusterOptions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "removed.yaml")
+	raw := []byte("node:\n  id: n\nnetwork:\n  port: 6380\n  maxConnections: 10\nengine:\n  stripeCount: 4\n  evictionPolicy: noeviction\ncluster:\n  autoFailover: true\n")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if err := c.Validate(); err == nil {
-		t.Fatalf("expected validation failure")
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected removed autoFailover option to be rejected")
 	}
 }
 
@@ -113,10 +107,29 @@ func TestValidateRejectsClusterFlagsWithoutEnabled(t *testing.T) {
 		Node:    NodeConfig{ID: "n"},
 		Network: NetworkConfig{Port: 6380, MaxConnections: 10},
 		Engine:  EngineConfig{StripeCount: 8, EvictionPolicy: "lru"},
-		Cluster: ClusterConfig{ShardingEnabled: true, WriteSafetyMode: "async"},
+		Cluster: ClusterConfig{ShardingEnabled: true},
 	}
 	if err := c.Validate(); err == nil {
 		t.Fatalf("expected validation failure")
+	}
+}
+
+func TestValidateRequiresReplicationInClusterMode(t *testing.T) {
+	c := &Config{
+		Node:    NodeConfig{ID: "node-1"},
+		Network: NetworkConfig{Port: 6381, MaxConnections: 10},
+		Engine:  EngineConfig{StripeCount: 8, EvictionPolicy: "lru"},
+		Cluster: ClusterConfig{
+			ID: "cluster", Enabled: true, ShardingEnabled: true, SlotCount: 1024,
+			RoutingMode: "proxy", FailoverMode: "manual",
+			Peers: []PeerConfig{
+				{ID: "node-1", Address: "127.0.0.1:6381", APIAddress: "127.0.0.1:7381"},
+				{ID: "node-2", Address: "127.0.0.1:6382", APIAddress: "127.0.0.1:7382"},
+			},
+		},
+	}
+	if err := c.Validate(); err == nil {
+		t.Fatal("expected cluster mode without replication to fail")
 	}
 }
 
@@ -125,7 +138,7 @@ func TestValidateRejectsUnknownLogLevel(t *testing.T) {
 		Node:          NodeConfig{ID: "n"},
 		Network:       NetworkConfig{Port: 6380, MaxConnections: 10},
 		Engine:        EngineConfig{StripeCount: 8, EvictionPolicy: "lru"},
-		Cluster:       ClusterConfig{WriteSafetyMode: "async"},
+		Cluster:       ClusterConfig{},
 		Observability: ObservabilityConfig{LogLevel: "verbose"},
 	}
 	if err := c.Validate(); err == nil {
@@ -138,7 +151,7 @@ func TestValidateNormalizesLogLevel(t *testing.T) {
 		Node:          NodeConfig{ID: "n"},
 		Network:       NetworkConfig{Port: 6380, MaxConnections: 10},
 		Engine:        EngineConfig{StripeCount: 8, EvictionPolicy: "lru"},
-		Cluster:       ClusterConfig{WriteSafetyMode: "async"},
+		Cluster:       ClusterConfig{},
 		Observability: ObservabilityConfig{LogLevel: "WARN"},
 	}
 	if err := c.Validate(); err != nil {

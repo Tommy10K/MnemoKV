@@ -19,8 +19,6 @@ cluster:
   enabled: false
   shardingEnabled: false
   replicationEnabled: false
-  autoFailover: false
-  writeSafetyMode: async
   peers: []
 
 persistence:

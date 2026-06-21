@@ -39,6 +39,7 @@ func main() {
 	clusterMgr := cluster.NewManagerWithNode(cfg.Cluster, cfg.Node.ID)
 	clusterMgr.AttachEngine(eng)
 	snapshotMgr := persistence.New(cfg.Persistence, cfg.Node.ID, eng, clusterMgr.SnapshotMetadata)
+	snapshotMgr.SetMetadataRestorer(clusterMgr.RestoreMetadata)
 	if cfg.Persistence.Enabled && cfg.Persistence.LoadOnStart {
 		restored, restoreErr := snapshotMgr.RestoreLatest()
 		switch {
@@ -50,7 +51,11 @@ func main() {
 			log.Fatalf("persistence: restore: %v", restoreErr)
 		}
 	}
-	srv := server.New(cfg.Network, eng, sink)
+	var commandExecutor server.CommandExecutor = eng
+	if cfg.Cluster.Enabled {
+		commandExecutor = clusterMgr.Coordinator()
+	}
+	srv := server.New(cfg.Network, commandExecutor, sink)
 	apiSrv := api.New(cfg.Observability, cfg.Node, cfg.Cluster, eng, sink, clusterMgr, snapshotMgr)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

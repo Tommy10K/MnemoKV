@@ -17,11 +17,6 @@ var validEvictionPolicies = map[string]struct{}{
 	"random":     {},
 }
 
-var validWriteSafetyModes = map[string]struct{}{
-	"async":  {},
-	"strong": {},
-}
-
 var validSnapshotFormats = map[string]struct{}{
 	"json":   {},
 	"binary": {},
@@ -82,16 +77,13 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	mode := strings.ToLower(c.Cluster.WriteSafetyMode)
-	if _, ok := validWriteSafetyModes[mode]; !ok {
-		return fmt.Errorf("cluster.writeSafetyMode %q is not supported", c.Cluster.WriteSafetyMode)
-	}
-	c.Cluster.WriteSafetyMode = mode
+	c.Cluster.RoutingMode = strings.ToLower(c.Cluster.RoutingMode)
+	c.Cluster.FailoverMode = strings.ToLower(c.Cluster.FailoverMode)
 
 	if !c.Cluster.Enabled {
 		// Standalone mode rejects any leftover cluster flag so misconfigurations
 		// fail loudly rather than being silently ignored.
-		if c.Cluster.ShardingEnabled || c.Cluster.ReplicationEnabled || c.Cluster.AutoFailover {
+		if c.Cluster.ShardingEnabled || c.Cluster.ReplicationEnabled {
 			return fmt.Errorf("cluster.enabled=false but other cluster flags are set")
 		}
 		if len(c.Cluster.Peers) > 0 {
@@ -100,29 +92,48 @@ func (c *Config) Validate() error {
 		return nil
 	}
 
-	if c.Cluster.AutoFailover && !c.Cluster.ReplicationEnabled {
-		return fmt.Errorf("cluster.autoFailover requires cluster.replicationEnabled")
+	if strings.TrimSpace(c.Cluster.ID) == "" {
+		return fmt.Errorf("cluster.id must not be empty when cluster is enabled")
 	}
-	if c.Cluster.ReplicationEnabled && !c.Cluster.ShardingEnabled {
-		return fmt.Errorf("cluster.replicationEnabled requires cluster.shardingEnabled")
+	if !c.Cluster.ShardingEnabled {
+		return fmt.Errorf("cluster.enabled=true requires cluster.shardingEnabled=true")
 	}
-	if mode == "strong" && !c.Cluster.ReplicationEnabled {
-		return fmt.Errorf("cluster.writeSafetyMode=strong requires cluster.replicationEnabled")
+	if !c.Cluster.ReplicationEnabled {
+		return fmt.Errorf("cluster.enabled=true requires cluster.replicationEnabled=true")
 	}
-	if len(c.Cluster.Peers) == 0 {
-		return fmt.Errorf("cluster.enabled=true but cluster.peers is empty")
+	if c.Cluster.SlotCount == 0 || c.Cluster.SlotCount > 65536 {
+		return fmt.Errorf("cluster.slotCount %d is out of range", c.Cluster.SlotCount)
+	}
+	if c.Cluster.RoutingMode != "proxy" {
+		return fmt.Errorf("cluster.routingMode %q is not supported", c.Cluster.RoutingMode)
+	}
+	if c.Cluster.FailoverMode != "manual" {
+		return fmt.Errorf("cluster.failoverMode %q is not supported", c.Cluster.FailoverMode)
+	}
+	if len(c.Cluster.Peers) < 2 || len(c.Cluster.Peers) > 5 {
+		return fmt.Errorf("cluster.peers must contain between 2 and 5 nodes")
 	}
 
 	seen := make(map[string]struct{}, len(c.Cluster.Peers))
+	seenAddresses := make(map[string]struct{}, len(c.Cluster.Peers))
+	seenAPIAddresses := make(map[string]struct{}, len(c.Cluster.Peers))
 	selfFound := false
 	for _, p := range c.Cluster.Peers {
-		if p.ID == "" || p.Address == "" {
-			return fmt.Errorf("cluster.peers entries must have id and address")
+		if p.ID == "" || p.Address == "" || p.APIAddress == "" {
+			return fmt.Errorf("cluster.peers entries must have id, address, and apiAddress")
 		}
 		if _, dup := seen[p.ID]; dup {
 			return fmt.Errorf("cluster.peers contains duplicate id %q", p.ID)
 		}
 		seen[p.ID] = struct{}{}
+		if _, dup := seenAddresses[p.Address]; dup {
+			return fmt.Errorf("cluster.peers contains duplicate address %q", p.Address)
+		}
+		seenAddresses[p.Address] = struct{}{}
+		if _, dup := seenAPIAddresses[p.APIAddress]; dup {
+			return fmt.Errorf("cluster.peers contains duplicate apiAddress %q", p.APIAddress)
+		}
+		seenAPIAddresses[p.APIAddress] = struct{}{}
 		if p.ID == c.Node.ID {
 			selfFound = true
 		}

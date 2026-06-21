@@ -39,7 +39,7 @@ func (s *Server) handleCommands(w http.ResponseWriter, r *http.Request) {
 		cmd.Args = append(cmd.Args, []byte(a))
 	}
 
-	frame := s.engine.Execute(cmd)
+	frame := s.executor.Execute(cmd)
 	writeJSON(w, http.StatusOK, frameToResult(frame))
 }
 

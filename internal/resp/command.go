@@ -101,11 +101,26 @@ func equalFoldASCII(b []byte, s string) bool {
 // this in one place means the cluster router never duplicates command parsing
 // logic. For commands that have no key (e.g. PING) it returns nil.
 func ExtractPrimaryKey(c *Command) []byte {
-	switch c.Name {
-	case "PING", "ECHO", "QUIT", "FLUSHDB", "COMMAND", "CLIENT", "HELLO":
+	keys := ExtractKeys(c)
+	if len(keys) == 0 {
 		return nil
+	}
+	return keys[0]
+}
+
+// ExtractKeys returns every key participating in a routing decision.
+func ExtractKeys(c *Command) [][]byte {
+	switch c.Name {
+	case "PING", "ECHO", "QUIT", "FLUSHDB", "FLUSHALL", "COMMAND", "CLIENT", "HELLO",
+		"REPLICATE", "CLUSTERMETA", "CLUSTERAPPLY", "CLUSTERSNAPSHOT":
+		return nil
+	case "DEL", "EXISTS":
+		return c.Args
 	default:
-		return c.Key()
+		if len(c.Args) == 0 {
+			return nil
+		}
+		return c.Args[:1]
 	}
 }
 

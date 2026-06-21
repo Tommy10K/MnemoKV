@@ -2,45 +2,21 @@ package cluster
 
 import "github.com/mnemokv/mnemokv/internal/snapshot"
 
-const currentSlotCount uint32 = 16384
-
-// SnapshotMetadata exposes the cluster state available in the current
-// prototype without implying that the later fixed-slot redesign is complete.
 func (m *Manager) SnapshotMetadata() snapshot.ClusterMetadata {
-	if m == nil || !m.cfg.Enabled {
+	if m == nil || m.metadata == nil {
 		return snapshot.ClusterMetadata{}
 	}
-	meta := snapshot.ClusterMetadata{ClusterID: m.cfg.ID, SlotCount: currentSlotCount}
-	var (
-		term        uint64
-		leaders     map[uint16]string
-		lastApplied uint64
-	)
-	if m.controlPlane != nil {
-		term = m.controlPlane.CurrentTerm()
-		meta.MetadataVersion = term
-		leaders = m.controlPlane.Leaders()
+	state := m.metadata.Snapshot()
+	meta := snapshot.ClusterMetadata{ClusterID: state.ClusterID, SlotCount: state.SlotCount, MetadataVersion: state.Version, Peers: make([]snapshot.Peer, len(state.Peers)), Slots: make([]snapshot.Slot, len(state.Slots))}
+	for i, peer := range state.Peers {
+		meta.Peers[i] = snapshot.Peer{ID: peer.ID, Address: peer.Address, APIAddress: peer.APIAddress}
 	}
-	if m.replicator != nil {
-		lastApplied = m.replicator.AppliedSequence()
-	}
-	meta.Slots = make([]snapshot.Slot, 0, currentSlotCount)
-	for slot := uint32(0); slot < currentSlotCount; slot++ {
-		leader := leaders[uint16(slot)]
-		if leader == "" && m.ring != nil {
-			leader = m.ring.Owner([]byte{byte(slot >> 8), byte(slot)})
+	for i, slot := range state.Slots {
+		meta.Slots[i] = snapshot.Slot{
+			Number: slot.Number, Role: m.metadata.LocalRole(slot), LeaderID: slot.LeaderID,
+			ReplicaID: slot.ReplicaID, Term: slot.Term, LastSequence: slot.LastSequence,
+			LastAppliedSequence: slot.LastAppliedSequence, ReplicaReady: slot.ReplicaReady,
 		}
-		role := "none"
-		if leader == m.nodeID {
-			role = "leader"
-		} else if m.cfg.ReplicationEnabled {
-			// The current prototype fans writes out to every peer, so each
-			// non-leader peer acts as a replica for persisted-state purposes.
-			role = "replica"
-		}
-		meta.Slots = append(meta.Slots, snapshot.Slot{
-			Number: slot, Role: role, Term: term, LastAppliedSequence: lastApplied,
-		})
 	}
 	return meta
 }
