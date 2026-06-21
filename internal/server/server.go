@@ -3,8 +3,8 @@
 // manages graceful shutdown.
 //
 // The server intentionally knows nothing about cluster routing or replication;
-// those concerns live in internal/cluster and will be plugged in via the
-// Executor abstraction once those phases land.
+// those concerns live in internal/cluster and are supplied through the
+// CommandExecutor abstraction.
 package server
 
 import (

@@ -8,7 +8,7 @@ import (
 )
 
 // validEvictionPolicies enumerates the policy names the engine recognizes.
-// The set is intentionally small at the baseline milestone.
+// The set is intentionally small and explicit.
 var validEvictionPolicies = map[string]struct{}{
 	"noeviction": {},
 	"fifo":       {},

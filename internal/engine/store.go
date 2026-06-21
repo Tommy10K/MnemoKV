@@ -9,15 +9,15 @@ import (
 
 // Store is the engine's striped key dictionary. It is concurrency-safe and is
 // safe to share by pointer across goroutines. All operations are O(1) on
-// average; range/scan operations are not exposed in the baseline.
+// average; range/scan operations are not exposed.
 type Store struct {
 	stripes  []*Stripe
 	mask     uint32 // stripeCount - 1 when stripeCount is a power of two
 	powerTwo bool
 
 	// usedBytes is updated on every create/update/delete to give the rest of
-	// the engine an approximate memory accounting view. Future eviction work
-	// will read it. We use atomic.Uint64 so reads from observability paths can
+	// the engine an approximate memory accounting view used by admission and
+	// eviction. We use atomic.Uint64 so reads from observability paths can
 	// snapshot it without acquiring stripe locks.
 	usedBytes atomic.Uint64
 }

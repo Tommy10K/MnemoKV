@@ -8,8 +8,7 @@ import (
 
 // Command is the parsed form of a single RESP request. It is allocated from a
 // pool so the per-request cost stays low. Args[0] is the primary key for
-// commands that operate on a single key (which covers everything in the
-// baseline command set).
+// commands that operate on a single key.
 type Command struct {
 	Name string   // upper-cased command name
 	Args [][]byte // command arguments, including the key
@@ -50,7 +49,7 @@ func Release(c *Command) {
 }
 
 // Key returns the primary key argument for the command, or nil if the command
-// takes no key. The baseline command set always places the key in Args[0].
+// takes no key. Supported key commands place their primary key in Args[0].
 func (c *Command) Key() []byte {
 	if len(c.Args) == 0 {
 		return nil

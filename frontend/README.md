@@ -2,6 +2,10 @@
 
 React/Vite learning, observability, and demonstration UI for MnemoKV.
 
+For implementation details and the recommended code-reading order, see the
+[frontend chapter](../docs/developer-guide/08-frontend-architecture-and-features.md) in the developer
+guide.
+
 ## Run
 
 Start a backend node from the repository root:

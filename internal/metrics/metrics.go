@@ -1,7 +1,5 @@
-// Package metrics will expose counters, gauges, latency histograms, and
-// structured events to the rest of the backend in later phases. The baseline
-// milestone only needs the Sink interface and a no-op implementation so other
-// packages can take it as a dependency.
+// Package metrics exposes counters, gauges, latency observations, and bounded
+// events through a small sink abstraction.
 package metrics
 
 import "time"
@@ -16,8 +14,7 @@ type Sink interface {
 	Gauge(name string, value float64, labels ...string)
 }
 
-// Noop discards every observation. It is the default sink for the baseline
-// milestone.
+// Noop discards every observation and is useful in focused tests.
 type Noop struct{}
 
 // NewNoop returns a Noop sink.

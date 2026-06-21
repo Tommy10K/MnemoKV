@@ -21,6 +21,13 @@ standalone RESP2 server and a small fixed-slot cluster with a React dashboard an
 MnemoKV is teaching-grade software, not a production Redis replacement. Snapshot persistence is
 not a write-ahead log: writes after the latest snapshot can be lost.
 
+## Developer documentation
+
+New contributors should follow the ordered
+[`docs/developer-guide`](docs/developer-guide/README.md) chapters. They trace startup, RESP and HTTP
+requests, engine data structures, concurrency, memory admission, snapshots, cluster behavior,
+frontend architecture, testing, extension workflows, and a complete demonstration.
+
 ## Requirements
 
 - Go 1.22 or newer.
@@ -202,6 +209,7 @@ responsive, keyboard, reduced-motion, and WCAG A/AA flows.
 ```text
 cmd/                  node, workload, and adminctl binaries
 configs/              standalone, persistence, and cluster YAML files
+docs/developer-guide/ ordered implementation onboarding and demo walkthrough
 frontend/             React/Vite learning and observability UI
 internal/api/         HTTP API and SSE
 internal/cluster/     fixed-slot metadata, routing, replication, membership, failover, and repair

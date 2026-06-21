@@ -1,6 +1,6 @@
-// Command node is the MnemoKV server binary. It loads a YAML config, builds
-// the engine and (placeholder) cluster manager, and runs the RESP listener
-// until it receives SIGINT/SIGTERM.
+// Command node is the MnemoKV server binary. It loads YAML configuration,
+// composes the engine, cluster and persistence managers, and runs the RESP and
+// HTTP listeners until it receives SIGINT/SIGTERM.
 package main
 
 import (

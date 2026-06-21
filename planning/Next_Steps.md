@@ -28,6 +28,9 @@ end-to-end tests cover navigation, API switching, a live dashboard and command c
 shapes, offline behavior, benchmark loading, WCAG A/AA checks, and laptop, projector, and tablet
 viewports.
 
+The tracked developer guide now provides an ordered implementation walkthrough and a complete demo
+flow for contributors who only know the project's general purpose.
+
 ## Verification Baseline
 
 For backend changes, run the focused package tests followed by `go test ./...`; use race tests for
@@ -48,19 +51,25 @@ The end-to-end runner builds and starts an isolated standalone node and Vite ser
 both processes. The deterministic presentation dataset can be loaded with
 `scripts/load-demo-dataset.ps1` while a standalone node is running.
 
-## Suggested Further Improvements
+## Experimental Automatic Cluster Recovery
 
-- Add component-level tests for parser edge cases and complex visual interactions; the current
-  browser suite intentionally concentrates on user-visible integration behavior.
-- Add visual-regression snapshots for the main presentation routes and high-contrast mode.
-- Generate or share an explicit API schema so backend and frontend response contracts cannot drift.
-- Add CI jobs for Go tests, frontend lint/build, and Edge/Chromium end-to-end tests on Windows and
-  Linux.
-- Expand responsive testing to phone-sized layouts if mobile use becomes a presentation goal.
-- Add longer cluster partition and recovery runs plus replication-lag observability.
-- Consider an admin-planned rebalance workflow. Automatic failover still requires a quorum-backed
-  metadata design and must not be added as a local-election shortcut.
-- Consider a write-ahead log only if recovery-point guarantees beyond periodic snapshots become a
-  requirement.
-- Treat authentication, authorization, TLS, RESP3, consensus, and production hardening as separate
-  scope rather than incremental polish.
+Automatic recovery should be an optional control-plane feature built beside the current cluster,
+not inside its command, routing, or replication paths. The existing fixed-slot metadata, manual
+admin operations, and synchronous data replication should remain the stable default.
+
+The least coupled design is a separate `cluster-controller` process or package running a small Raft
+group. Raft should replicate only control-plane decisions: metadata versions, slot terms,
+promotions, replacement-replica assignments, and repair intents. It should not become the data
+command log and should not sit on the normal RESP/HTTP request path.
+
+The controller leader would observe nodes through existing health and cluster-state APIs. After a
+failure timeout, it would propose a recovery plan to Raft. Only a majority-committed plan may be
+executed; without quorum, ownership must remain unchanged. Execution should use a narrow adapter
+over the existing promote, assign-replica, and full-slot-sync operations, making each step
+idempotent and resumable after controller restart or leadership change.
+
+Keep the experiment disabled by default and isolate it behind interfaces so current nodes need, at
+most, a committed control index or fencing token when accepting metadata updates. Manual recovery
+must continue to work unchanged when the controller is absent. Test the controller first with an
+in-memory Raft transport and simulated failures, then with separate multi-process tests covering
+leader loss, minority partitions, duplicate plans, restart during repair, and stale-node rejoin.

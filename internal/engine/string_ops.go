@@ -8,7 +8,7 @@ import (
 )
 
 // cmdSet implements `SET key value [EX seconds | PX milliseconds] [NX | XX]`.
-// We deliberately keep the option set narrow at the baseline: KEEPTTL and
+// We deliberately keep the option set narrow: KEEPTTL and
 // EXAT/PXAT can be added later when the data model needs them.
 func (x *Executor) cmdSet(cmd *resp.Command) resp.Frame {
 	if len(cmd.Args) < 2 {
@@ -96,7 +96,7 @@ func (x *Executor) cmdGet(cmd *resp.Command) resp.Frame {
 	sv := e.Value.(*StringValue)
 	// Copy so a later mutation by another goroutine cannot tear the bytes
 	// we hand to the writer. The cost is one allocation per GET, which is
-	// acceptable for the baseline.
+	// acceptable for this educational implementation.
 	out := make([]byte, len(sv.Data))
 	copy(out, sv.Data)
 	return resp.BulkBytes(out)

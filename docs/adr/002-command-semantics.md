@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (baseline milestone).
+Accepted and implemented.
 
 ## Context
 
@@ -20,7 +20,7 @@ Commands must behave predictably and compatibly with `redis-cli`. Locking semant
   sign or leading zeros. Negative zero is rejected.
 - Relative expiration arithmetic rejects multiplication or timestamp overflow rather than wrapping.
 
-### Per-command semantics (baseline)
+### Per-command semantics
 
 - `PING` — returns `PONG`. With one argument, returns the argument as a bulk string.
 - `ECHO message` — returns the message as a bulk string.
@@ -31,7 +31,7 @@ Commands must behave predictably and compatibly with `redis-cli`. Locking semant
   - A successful `SET` without `KEEPTTL` clears any previous TTL. (Baseline does not implement `KEEPTTL`.)
   - The existence condition and write occur atomically under the owning stripe lock.
   - At most one expiration option is accepted; repeated or conflicting `EX`/`PX` is a syntax error.
-- `GET key` — returns the string value, nil bulk if missing or wrong type. Wrong type returns `WRONGTYPE`.
+- `GET key` — returns the string value, nil bulk if missing, and `WRONGTYPE` for another value type.
 - `INCR key`
   - If missing, treats current value as `0`.
   - Value must be a base-10 64-bit signed integer; otherwise `ERR value is not an integer or out of range`.
@@ -46,7 +46,8 @@ Commands must behave predictably and compatibly with `redis-cli`. Locking semant
   - Returns `-2` if the key does not exist.
   - Returns `-1` if the key has no associated expiration.
   - Otherwise the remaining time in whole seconds (rounded up so a key never reports `0` while still alive).
-- `FLUSHDB` — clears all keys, returns `OK`. In standalone mode it acts on the local store. (Cluster fan-out is deferred.)
+- `FLUSHDB` and `FLUSHALL` — clear all local keys and return `OK` in standalone mode. Cluster mode
+  rejects them because no cluster-wide transaction protocol exists.
 - `COMMAND [DOCS ...]` — returns an empty array. This is enough for `redis-cli` to start interactively.
 - `CLIENT ...` — returns `OK`. Sufficient for `redis-cli` `CLIENT SETNAME` and `CLIENT GETNAME` probes.
 - `QUIT` — returns `OK`, then closes the connection.
