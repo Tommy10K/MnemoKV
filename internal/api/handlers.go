@@ -8,10 +8,15 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
+	dataState := "active"
+	if s.cluMgr != nil {
+		dataState = s.cluMgr.DataState()
+	}
 	writeJSON(w, http.StatusOK, HealthResponse{
-		Status: "ok",
-		NodeID: s.node.ID,
-		Mode:   s.node.Mode,
+		Status:    "ok",
+		NodeID:    s.node.ID,
+		Mode:      s.node.Mode,
+		DataState: dataState,
 	})
 }
 
@@ -57,11 +62,13 @@ func (s *Server) handleClusterState(w http.ResponseWriter, r *http.Request) {
 		SlotCount:    s.cluster.SlotCount,
 		RoutingMode:  s.cluster.RoutingMode,
 		FailoverMode: s.cluster.FailoverMode,
+		DataState:    "active",
 	}
 	for _, p := range s.cluster.Peers {
 		resp.Peers = append(resp.Peers, p.ID)
 	}
 	if s.cluMgr != nil {
+		resp.DataState = s.cluMgr.DataState()
 		for _, m := range s.cluMgr.Membership() {
 			resp.Membership = append(resp.Membership, PeerStatus{
 				ID:      m.ID,

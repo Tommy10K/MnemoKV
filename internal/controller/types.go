@@ -19,6 +19,7 @@ const (
 )
 
 type ClusterView struct {
+	ClusterID       string              `json:"clusterId"`
 	MetadataVersion uint64              `json:"metadataVersion"`
 	Slots           []SlotView          `json:"slots"`
 	Nodes           map[string]NodeView `json:"nodes"`
@@ -34,6 +35,7 @@ type NodeView struct {
 	LeaderSlots  int    `json:"leaderSlots"`
 	ReplicaSlots int    `json:"replicaSlots"`
 	Eligible     bool   `json:"eligible"`
+	Returning    bool   `json:"returning,omitempty"`
 }
 
 type SlotView struct {

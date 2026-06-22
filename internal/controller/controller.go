@@ -21,13 +21,14 @@ type Controller struct {
 	nodeID       string
 	metrics      *metrics.InMemory
 
-	mu       sync.Mutex
-	cancel   context.CancelFunc
-	done     chan struct{}
-	raft     *RaftNode
-	observer *Observer
-	planner  *Planner
-	executor *Executor
+	mu        sync.Mutex
+	cancel    context.CancelFunc
+	done      chan struct{}
+	raft      *RaftNode
+	observer  *Observer
+	planner   *Planner
+	executor  *Executor
+	returning *ReturningNodeController
 }
 
 func New(cfg config.ClusterConfig, controlPlane config.ControlPlaneConfig, nodeID string, sink *metrics.InMemory) *Controller {
@@ -59,19 +60,27 @@ func (c *Controller) Start(ctx context.Context) error {
 		cancel()
 		return err
 	}
+	returning, err := NewReturningNodeControllerFromConfig(c.cfg, c.controlPlane.RequestSigningSecret, raftNode)
+	if err != nil {
+		_ = raftNode.Shutdown()
+		cancel()
+		return err
+	}
 	c.cancel = cancel
 	c.raft = raftNode
 	c.observer = observer
 	c.planner = planner
 	c.executor = executor
+	c.returning = returning
 	c.done = make(chan struct{})
 	go func() {
 		defer close(c.done)
 		var workers sync.WaitGroup
-		workers.Add(4)
+		workers.Add(5)
 		go func() { defer workers.Done(); observer.Run(workerCtx) }()
 		go func() { defer workers.Done(); planner.Run(workerCtx) }()
 		go func() { defer workers.Done(); executor.Run(workerCtx) }()
+		go func() { defer workers.Done(); returning.Run(workerCtx) }()
 		go func() { defer workers.Done(); c.monitorStatus(workerCtx, raftNode) }()
 		workers.Wait()
 	}()
@@ -146,6 +155,7 @@ func (c *Controller) Shutdown(ctx context.Context) error {
 	c.observer = nil
 	c.planner = nil
 	c.executor = nil
+	c.returning = nil
 	c.mu.Unlock()
 
 	select {

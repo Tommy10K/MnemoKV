@@ -17,6 +17,7 @@ import (
 	"github.com/mnemokv/mnemokv/internal/cluster"
 	"github.com/mnemokv/mnemokv/internal/config"
 	"github.com/mnemokv/mnemokv/internal/controller"
+	"github.com/mnemokv/mnemokv/internal/controlplane"
 	"github.com/mnemokv/mnemokv/internal/engine"
 	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
@@ -39,9 +40,20 @@ func main() {
 	eng := engine.NewWithMetrics(cfg.Engine, sink)
 	clusterMgr := cluster.NewManagerWithNode(cfg.Cluster, cfg.Node.ID)
 	clusterMgr.AttachEngine(eng)
+	returningNode := false
+	if cfg.Cluster.Enabled && cfg.Cluster.FailoverMode == "automatic" {
+		returningNode, err = controlplane.MarkDataNodeInitialized(cfg.Cluster.Controller.RaftDir)
+		if err != nil {
+			log.Fatalf("data-node lifecycle: %v", err)
+		}
+		if returningNode {
+			clusterMgr.RequireAdmission()
+			logging.Infof("cluster: returning node starts empty and awaits controller admission")
+		}
+	}
 	snapshotMgr := persistence.New(cfg.Persistence, cfg.Node.ID, eng, clusterMgr.SnapshotMetadata)
 	snapshotMgr.SetMetadataRestorer(clusterMgr.RestoreMetadata)
-	if cfg.Persistence.Enabled && cfg.Persistence.LoadOnStart {
+	if cfg.Persistence.Enabled && cfg.Persistence.LoadOnStart && !returningNode {
 		restored, restoreErr := snapshotMgr.RestoreLatest()
 		switch {
 		case restoreErr == nil:

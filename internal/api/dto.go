@@ -3,9 +3,10 @@ package api
 import "github.com/mnemokv/mnemokv/internal/controlplane"
 
 type HealthResponse struct {
-	Status string `json:"status"`
-	NodeID string `json:"nodeId"`
-	Mode   string `json:"mode"`
+	Status    string `json:"status"`
+	NodeID    string `json:"nodeId"`
+	Mode      string `json:"mode"`
+	DataState string `json:"dataState,omitempty"`
 }
 
 type EngineStateResponse struct {
@@ -34,6 +35,15 @@ type ClusterStateResponse struct {
 	Membership      []PeerStatus                 `json:"membership,omitempty"`
 	Slots           []SlotStatus                 `json:"slots,omitempty"`
 	Recovery        *controlplane.StatusSnapshot `json:"recovery,omitempty"`
+	DataState       string                       `json:"dataState,omitempty"`
+}
+
+type ReturningNodeResponse struct {
+	ClusterID        string `json:"clusterId"`
+	MetadataVersion  uint64 `json:"metadataVersion"`
+	EntryCount       int    `json:"entryCount"`
+	RemovedSnapshots int    `json:"removedSnapshots"`
+	DataState        string `json:"dataState"`
 }
 
 type SlotStatus struct {

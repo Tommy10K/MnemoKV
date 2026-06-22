@@ -149,7 +149,9 @@ func (o *Observer) PollOnce(ctx context.Context) (ClusterView, error) {
 		record := o.failures[result.peer.ID]
 		if result.err == nil {
 			record = failureRecord{}
-			node.Reachable, node.Eligible = true, true
+			node.Reachable = true
+			node.Returning = result.state.DataState == "recovering"
+			node.Eligible = !node.Returning
 			states = append(states, result.state)
 		} else {
 			record.consecutive++
@@ -172,7 +174,7 @@ func (o *Observer) PollOnce(ctx context.Context) (ClusterView, error) {
 	if err != nil {
 		return ClusterView{}, err
 	}
-	view := ClusterView{MetadataVersion: canonical.MetadataVersion, Nodes: nodes, ObservedAt: now}
+	view := ClusterView{ClusterID: canonical.ClusterID, MetadataVersion: canonical.MetadataVersion, Nodes: nodes, ObservedAt: now}
 	view.Slots = make([]SlotView, len(canonical.Slots))
 	for i, slot := range canonical.Slots {
 		view.Slots[i] = SlotView{Number: slot.Number, LeaderID: slot.LeaderID, ReplicaID: slot.ReplicaID, Term: slot.Term, ReplicaReady: slot.ReplicaReady}

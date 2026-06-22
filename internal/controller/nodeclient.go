@@ -16,9 +16,10 @@ import (
 )
 
 type HealthResponse struct {
-	Status string `json:"status"`
-	NodeID string `json:"nodeId"`
-	Mode   string `json:"mode"`
+	Status    string `json:"status"`
+	NodeID    string `json:"nodeId"`
+	Mode      string `json:"mode"`
+	DataState string `json:"dataState"`
 }
 
 type ClusterStateResponse struct {
@@ -28,6 +29,7 @@ type ClusterStateResponse struct {
 	SlotCount       uint32       `json:"slotCount"`
 	MetadataVersion uint64       `json:"metadataVersion"`
 	Slots           []SlotStatus `json:"slots"`
+	DataState       string       `json:"dataState"`
 }
 
 type SlotStatus struct {
@@ -90,6 +92,19 @@ type AdminNodeAPI interface {
 	SyncReplica(context.Context, uint32, string, uint64) (ClusterAdminResponse, error)
 }
 
+type ReturningNodeResponse struct {
+	ClusterID        string `json:"clusterId"`
+	MetadataVersion  uint64 `json:"metadataVersion"`
+	EntryCount       int    `json:"entryCount"`
+	RemovedSnapshots int    `json:"removedSnapshots"`
+	DataState        string `json:"dataState"`
+}
+
+type ReturningNodeAPI interface {
+	PrepareReturning(context.Context, string, uint64, uint64) (ReturningNodeResponse, error)
+	AdmitReturning(context.Context, string, uint64, uint64) (ReturningNodeResponse, error)
+}
+
 type HTTPStatusError struct {
 	StatusCode int
 	Status     string
@@ -115,6 +130,46 @@ func (c *NodeClient) SyncReplica(ctx context.Context, slot uint32, nodeID string
 		Slot   uint32 `json:"slot"`
 		NodeID string `json:"nodeId"`
 	}{slot, nodeID}, controlIndex)
+}
+
+func (c *NodeClient) PrepareReturning(ctx context.Context, clusterID string, metadataVersion, controlIndex uint64) (ReturningNodeResponse, error) {
+	return c.postReturning(ctx, "/cluster/returning/prepare", clusterID, metadataVersion, controlIndex)
+}
+
+func (c *NodeClient) AdmitReturning(ctx context.Context, clusterID string, metadataVersion, controlIndex uint64) (ReturningNodeResponse, error) {
+	return c.postReturning(ctx, "/cluster/returning/admit", clusterID, metadataVersion, controlIndex)
+}
+
+func (c *NodeClient) postReturning(ctx context.Context, path, clusterID string, metadataVersion, controlIndex uint64) (ReturningNodeResponse, error) {
+	var result ReturningNodeResponse
+	body, err := json.Marshal(struct {
+		ClusterID       string `json:"clusterId"`
+		MetadataVersion uint64 `json:"metadataVersion"`
+	}{clusterID, metadataVersion})
+	if err != nil {
+		return result, err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(body))
+	if err != nil {
+		return result, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	index := strconv.FormatUint(controlIndex, 10)
+	request.Header.Set(ControlIndexHeader, index)
+	request.Header.Set(ControlSignatureHeader, signControlRequest(c.signingSecret, http.MethodPost, path, body, index))
+	response, err := c.client.Do(request)
+	if err != nil {
+		return result, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
+		return result, &HTTPStatusError{StatusCode: response.StatusCode, Status: response.Status}
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 8<<20)).Decode(&result); err != nil {
+		return result, err
+	}
+	return result, nil
 }
 
 func (c *NodeClient) postAdmin(ctx context.Context, path string, payload any, controlIndex uint64) (ClusterAdminResponse, error) {

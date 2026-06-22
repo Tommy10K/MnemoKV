@@ -625,12 +625,12 @@ old application dataset and obsolete application snapshots, rejoins empty and in
 reclaims its old slots, becomes eligible only after current metadata is installed, and receives all
 new leader/replica data through full-slot synchronization during a balanced 4→5 rebalance.
 
-- [ ] Returning node joins as `stale`/`recovering` and does not serve commands. Preserve its `nodeID` and `RaftDir`, but clear its engine dataset and invalidate/remove obsolete **application** snapshots before admission; none of that old data is inspected, merged, or used to recover `potential_data_loss` slots.
-- [ ] Install the latest committed metadata and verify the node has the correct cluster/epoch and an empty data engine. The controller keeps it **ineligible** and assigns it no slots until this validation passes.
-- [ ] Once eligible, the controller commits `AdmitReturningNode` and runs a **rebalance** (Phase 5) to transfer a fair share of leaders/replicas onto it (4→5) through normal full-slot synchronization, respecting rate limits and write-safety bounds.
-- [ ] Existing `potential_data_loss` slots remain unavailable and warned after this node returns; v1 deliberately does not recover data from a returning node's stale memory or snapshots.
-- [ ] Tests (harness): node returns with old metadata/data → old keys and snapshots are cleared and never resurrected; it serves nothing before admission; 4→5 rebalance fills it only from current authoritative nodes and converges to even placement; a node returning during active recovery waits for completion.
-- [ ] **Verify.**
+- [x] Returning node joins as `stale`/`recovering` and does not serve commands. Preserve its `nodeID` and `RaftDir`, but clear its engine dataset and invalidate/remove obsolete **application** snapshots before admission; none of that old data is inspected, merged, or used to recover `potential_data_loss` slots.
+- [x] Install the latest committed metadata and verify the node has the correct cluster/epoch and an empty data engine. The controller keeps it **ineligible** and assigns it no slots until this validation passes.
+- [x] Once eligible, the controller commits `AdmitReturningNode` and runs a **rebalance** (Phase 5) to transfer a fair share of leaders/replicas onto it (4→5) through normal full-slot synchronization, respecting rate limits and write-safety bounds.
+- [x] Existing `potential_data_loss` slots remain unavailable and warned after this node returns; v1 deliberately does not recover data from a returning node's stale memory or snapshots.
+- [x] Tests (harness): node returns with old metadata/data → old keys and snapshots are cleared and never resurrected; it serves nothing before admission; 4→5 rebalance fills it only from current authoritative nodes and converges to even placement; a node returning during active recovery waits for completion.
+- [x] **Verify.**
 
 ---
 

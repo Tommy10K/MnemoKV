@@ -76,13 +76,10 @@ func (s *Server) Start(ctx context.Context) error {
 	if s.fenceErr != nil {
 		return fmt.Errorf("control-plane fencing: %w", s.fenceErr)
 	}
-	mux := http.NewServeMux()
-	s.registerRoutes(mux)
-
 	addr := fmt.Sprintf("%s:%d", s.cfg.APIBindAddr, s.cfg.APIPort)
 	s.httpSrv = &http.Server{
 		Addr:              addr,
-		Handler:           withCORS(mux),
+		Handler:           s.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	logging.Infof("api: listening on %s", addr)
@@ -100,6 +97,14 @@ func (s *Server) Start(ctx context.Context) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+// Handler exposes the production API routes for deterministic in-process
+// integration tests and embedders.
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	s.registerRoutes(mux)
+	return withCORS(mux)
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {

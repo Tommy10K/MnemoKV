@@ -14,4 +14,6 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/cluster/promote", s.handleClusterPromote)
 	mux.HandleFunc("/cluster/replica", s.handleClusterReplica)
 	mux.HandleFunc("/cluster/sync", s.handleClusterSync)
+	mux.HandleFunc("/cluster/returning/prepare", s.handleReturningNodePrepare)
+	mux.HandleFunc("/cluster/returning/admit", s.handleReturningNodeAdmit)
 }

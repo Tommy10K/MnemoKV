@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/mnemokv/mnemokv/internal/config"
+	"github.com/mnemokv/mnemokv/internal/engine"
 	"github.com/mnemokv/mnemokv/internal/resp"
 )
 
@@ -101,5 +102,24 @@ func TestReplicatorPreservesReplicaGapForRepair(t *testing.T) {
 	}
 	if err := replicator.Replicate(context.Background(), &resp.Command{Name: "SET", Args: [][]byte{key, []byte("v")}}); !errors.Is(err, ErrSequenceGap) {
 		t.Fatalf("replication error = %v", err)
+	}
+}
+
+func TestRecoveringNodeRejectsPublicCommandsButAllowsMetadataInstall(t *testing.T) {
+	cfg := metadataTestConfig([]config.PeerConfig{{ID: "node-1", Address: "127.0.0.1:1"}})
+	manager := NewManagerWithNode(cfg, "node-1")
+	eng := engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noeviction"})
+	manager.AttachEngine(eng)
+	manager.RequireAdmission()
+	want := resp.Error{Prefix: "CLUSTERDOWN", Message: "node is recovering and not admitted"}
+	if frame := manager.Coordinator().Execute(&resp.Command{Name: "PING"}); frame != want {
+		t.Fatalf("recovering node served public command: %#v", frame)
+	}
+	if frame := manager.Coordinator().Execute(&resp.Command{Name: "CLUSTERMETA"}); func() bool { _, ok := frame.(resp.BulkString); return ok }() == false {
+		t.Fatalf("recovering node rejected metadata command: %#v", frame)
+	}
+	manager.AdmitData()
+	if frame := manager.Coordinator().Execute(&resp.Command{Name: "PING"}); frame != resp.Pong {
+		t.Fatalf("admitted node remained fenced: %#v", frame)
 	}
 }
