@@ -60,7 +60,18 @@ func defaults() *Config {
 			MemoryLimitBytes: 0,
 			EvictionPolicy:   "lru",
 		},
-		Cluster: ClusterConfig{SlotCount: 1024, RoutingMode: "proxy", FailoverMode: "manual"},
+		Cluster: ClusterConfig{
+			SlotCount:    1024,
+			RoutingMode:  "proxy",
+			FailoverMode: "manual",
+			Controller: ControllerConfig{
+				ObserveIntervalMs:      1000,
+				FailureTimeoutMs:       10000,
+				ConsecutiveFailures:    3,
+				RebalanceSkewThreshold: 1,
+				MigrationRateLimit:     10,
+			},
+		},
 		Persistence: PersistenceConfig{
 			SnapshotIntervalSec: 60,
 			MaxSnapshots:        5,
@@ -90,6 +101,21 @@ func (c *Config) applyFallbacks() {
 	}
 	if c.Cluster.FailoverMode == "" {
 		c.Cluster.FailoverMode = "manual"
+	}
+	if c.Cluster.Controller.ObserveIntervalMs == 0 {
+		c.Cluster.Controller.ObserveIntervalMs = 1000
+	}
+	if c.Cluster.Controller.FailureTimeoutMs == 0 {
+		c.Cluster.Controller.FailureTimeoutMs = 10000
+	}
+	if c.Cluster.Controller.ConsecutiveFailures == 0 {
+		c.Cluster.Controller.ConsecutiveFailures = 3
+	}
+	if c.Cluster.Controller.RebalanceSkewThreshold == 0 {
+		c.Cluster.Controller.RebalanceSkewThreshold = 1
+	}
+	if c.Cluster.Controller.MigrationRateLimit == 0 {
+		c.Cluster.Controller.MigrationRateLimit = 10
 	}
 	if c.Persistence.DataDir == "" {
 		c.Persistence.DataDir = c.Node.DataDir

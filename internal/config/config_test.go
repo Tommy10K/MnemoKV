@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -88,6 +89,65 @@ func TestLoadCluster(t *testing.T) {
 	}
 	if len(cfg.Cluster.Peers) != 3 {
 		t.Fatalf("expected 3 peers, got %d", len(cfg.Cluster.Peers))
+	}
+}
+
+func TestLoadAutomaticClusterConfigs(t *testing.T) {
+	for i := 1; i <= 5; i++ {
+		path := filepath.Join("..", "..", "configs", fmt.Sprintf("cluster-node-%d-auto.yaml", i))
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatalf("load %s: %v", path, err)
+		}
+		if cfg.Cluster.FailoverMode != "automatic" || len(cfg.Cluster.Peers) != 5 {
+			t.Fatalf("unexpected automatic config: %+v", cfg.Cluster)
+		}
+	}
+}
+
+func TestValidateAutomaticClusterRequirements(t *testing.T) {
+	valid := automaticTestConfig()
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid automatic config: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*Config)
+	}{
+		{name: "at least three peers", mutate: func(c *Config) { c.Cluster.Peers = c.Cluster.Peers[:2] }},
+		{name: "consistent peer mode", mutate: func(c *Config) { c.Cluster.Peers[1].FailoverMode = "manual" }},
+		{name: "control address", mutate: func(c *Config) { c.Cluster.Peers[1].ControlAddress = "" }},
+		{name: "bootstrap node", mutate: func(c *Config) { c.Cluster.Controller.BootstrapNodeID = "missing" }},
+		{name: "signing secret", mutate: func(c *Config) { c.ControlPlane.RequestSigningSecret = "" }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := automaticTestConfig()
+			tc.mutate(&cfg)
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("expected validation failure")
+			}
+		})
+	}
+}
+
+func automaticTestConfig() Config {
+	return Config{
+		Node:    NodeConfig{ID: "node-1"},
+		Network: NetworkConfig{Port: 6381, MaxConnections: 10},
+		Engine:  EngineConfig{StripeCount: 8, EvictionPolicy: "lru"},
+		Cluster: ClusterConfig{
+			ID: "cluster", Enabled: true, ShardingEnabled: true, ReplicationEnabled: true, SlotCount: 1024,
+			RoutingMode: "proxy", FailoverMode: "automatic",
+			Controller: ControllerConfig{ControlPort: 7481, RaftDir: "raft", BootstrapNodeID: "node-1", ObserveIntervalMs: 10, FailureTimeoutMs: 100, ConsecutiveFailures: 2, RebalanceSkewThreshold: 1, MigrationRateLimit: 1},
+			Peers: []PeerConfig{
+				{ID: "node-1", Address: "a", APIAddress: "A", ControlAddress: "CA", FailoverMode: "automatic"},
+				{ID: "node-2", Address: "b", APIAddress: "B", ControlAddress: "CB", FailoverMode: "automatic"},
+				{ID: "node-3", Address: "c", APIAddress: "C", ControlAddress: "CC", FailoverMode: "automatic"},
+			},
+		},
+		ControlPlane: ControlPlaneConfig{RequestSigningSecret: "secret"},
 	}
 }
 

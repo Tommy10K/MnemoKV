@@ -107,7 +107,7 @@ func (c *Config) Validate() error {
 	if c.Cluster.RoutingMode != "proxy" {
 		return fmt.Errorf("cluster.routingMode %q is not supported", c.Cluster.RoutingMode)
 	}
-	if c.Cluster.FailoverMode != "manual" {
+	if c.Cluster.FailoverMode != "manual" && c.Cluster.FailoverMode != "automatic" {
 		return fmt.Errorf("cluster.failoverMode %q is not supported", c.Cluster.FailoverMode)
 	}
 	if len(c.Cluster.Peers) < 2 || len(c.Cluster.Peers) > 5 {
@@ -117,6 +117,7 @@ func (c *Config) Validate() error {
 	seen := make(map[string]struct{}, len(c.Cluster.Peers))
 	seenAddresses := make(map[string]struct{}, len(c.Cluster.Peers))
 	seenAPIAddresses := make(map[string]struct{}, len(c.Cluster.Peers))
+	seenControlAddresses := make(map[string]struct{}, len(c.Cluster.Peers))
 	selfFound := false
 	for _, p := range c.Cluster.Peers {
 		if p.ID == "" || p.Address == "" || p.APIAddress == "" {
@@ -134,12 +135,51 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("cluster.peers contains duplicate apiAddress %q", p.APIAddress)
 		}
 		seenAPIAddresses[p.APIAddress] = struct{}{}
+		if c.Cluster.FailoverMode == "automatic" {
+			if strings.ToLower(p.FailoverMode) != "automatic" {
+				return fmt.Errorf("cluster.peers entry %q must use failoverMode automatic", p.ID)
+			}
+			if strings.TrimSpace(p.ControlAddress) == "" {
+				return fmt.Errorf("cluster.peers entry %q must have controlAddress in automatic mode", p.ID)
+			}
+			if _, dup := seenControlAddresses[p.ControlAddress]; dup {
+				return fmt.Errorf("cluster.peers contains duplicate controlAddress %q", p.ControlAddress)
+			}
+			seenControlAddresses[p.ControlAddress] = struct{}{}
+		}
 		if p.ID == c.Node.ID {
 			selfFound = true
 		}
 	}
 	if !selfFound {
 		return fmt.Errorf("cluster.peers must include this node (%q)", c.Node.ID)
+	}
+	if c.Cluster.FailoverMode == "automatic" {
+		if len(c.Cluster.Peers) < 3 {
+			return fmt.Errorf("cluster.failoverMode automatic requires at least 3 peers; use manual mode for smaller clusters")
+		}
+		controller := c.Cluster.Controller
+		if controller.ControlPort <= 0 || controller.ControlPort > 65535 {
+			return fmt.Errorf("cluster.controller.controlPort %d is out of range", controller.ControlPort)
+		}
+		if strings.TrimSpace(controller.RaftDir) == "" {
+			return fmt.Errorf("cluster.controller.raftDir must not be empty in automatic mode")
+		}
+		if strings.TrimSpace(controller.BootstrapNodeID) == "" {
+			return fmt.Errorf("cluster.controller.bootstrapNodeId must not be empty in automatic mode")
+		}
+		if _, ok := seen[controller.BootstrapNodeID]; !ok {
+			return fmt.Errorf("cluster.controller.bootstrapNodeId %q is not a configured peer", controller.BootstrapNodeID)
+		}
+		if strings.TrimSpace(c.ControlPlane.RequestSigningSecret) == "" {
+			return fmt.Errorf("controlPlane.requestSigningSecret must not be empty in automatic mode")
+		}
+		if controller.ObserveIntervalMs <= 0 || controller.FailureTimeoutMs <= 0 || controller.ConsecutiveFailures <= 0 {
+			return fmt.Errorf("cluster.controller observation and failure settings must be positive")
+		}
+		if controller.RebalanceSkewThreshold <= 0 || controller.MigrationRateLimit <= 0 {
+			return fmt.Errorf("cluster.controller rebalanceSkewThreshold and migrationRateLimit must be positive")
+		}
 	}
 	return nil
 }

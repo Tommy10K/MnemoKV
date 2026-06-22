@@ -1,0 +1,21 @@
+node: {id: node-3, mode: clustered, dataDir: ./data/auto/node-3}
+network: {bindAddr: 127.0.0.1, port: 6383, maxConnections: 1024, readTimeoutMs: 30000, writeTimeoutMs: 30000}
+engine: {stripeCount: 32, memoryLimitBytes: 0, evictionPolicy: lru}
+cluster:
+  id: demo-auto-cluster
+  enabled: true
+  shardingEnabled: true
+  replicationEnabled: true
+  slotCount: 1024
+  routingMode: proxy
+  failoverMode: automatic
+  controller: {controlPort: 7483, raftDir: ./data/auto/node-3/controller, bootstrapNodeId: node-1, observeIntervalMs: 1000, failureTimeoutMs: 10000, consecutiveFailures: 3, rebalanceSkewThreshold: 1, migrationRateLimit: 10}
+  peers:
+    - {id: node-1, address: '127.0.0.1:6381', apiAddress: '127.0.0.1:7381', controlAddress: '127.0.0.1:7481', failoverMode: automatic}
+    - {id: node-2, address: '127.0.0.1:6382', apiAddress: '127.0.0.1:7382', controlAddress: '127.0.0.1:7482', failoverMode: automatic}
+    - {id: node-3, address: '127.0.0.1:6383', apiAddress: '127.0.0.1:7383', controlAddress: '127.0.0.1:7483', failoverMode: automatic}
+    - {id: node-4, address: '127.0.0.1:6384', apiAddress: '127.0.0.1:7384', controlAddress: '127.0.0.1:7484', failoverMode: automatic}
+    - {id: node-5, address: '127.0.0.1:6385', apiAddress: '127.0.0.1:7385', controlAddress: '127.0.0.1:7485', failoverMode: automatic}
+controlPlane: {requestSigningSecret: mnemokv-local-demo-controller-secret}
+persistence: {enabled: false, dataDir: ./data/auto/node-3, snapshotIntervalSec: 60, maxSnapshots: 5, loadOnStart: false, format: json}
+observability: {apiBindAddr: 127.0.0.1, apiPort: 7383, logLevel: info}

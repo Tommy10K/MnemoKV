@@ -16,6 +16,7 @@ import (
 	"github.com/mnemokv/mnemokv/internal/api"
 	"github.com/mnemokv/mnemokv/internal/cluster"
 	"github.com/mnemokv/mnemokv/internal/config"
+	"github.com/mnemokv/mnemokv/internal/controller"
 	"github.com/mnemokv/mnemokv/internal/engine"
 	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
@@ -64,6 +65,13 @@ func main() {
 	if err := clusterMgr.Start(ctx); err != nil {
 		log.Fatalf("cluster: start: %v", err)
 	}
+	var recoveryController *controller.Controller
+	if cfg.Cluster.Enabled && cfg.Cluster.FailoverMode == "automatic" {
+		recoveryController = controller.New(cfg.Cluster, cfg.Node.ID)
+		if err := recoveryController.Start(ctx); err != nil {
+			log.Fatalf("controller: start: %v", err)
+		}
+	}
 	snapshotMgr.Start(ctx)
 
 	serverDone := make(chan error, 1)
@@ -93,6 +101,11 @@ func main() {
 	}
 	if err := apiSrv.Shutdown(shutdownCtx); err != nil {
 		logging.Warnf("api: shutdown: %v", err)
+	}
+	if recoveryController != nil {
+		if err := recoveryController.Shutdown(shutdownCtx); err != nil {
+			logging.Warnf("controller: shutdown: %v", err)
+		}
 	}
 	if err := clusterMgr.Shutdown(shutdownCtx); err != nil {
 		logging.Warnf("cluster: shutdown: %v", err)
