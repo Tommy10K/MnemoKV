@@ -17,6 +17,7 @@ type Controller struct {
 	mu     sync.Mutex
 	cancel context.CancelFunc
 	done   chan struct{}
+	raft   *RaftNode
 }
 
 func New(cfg config.ClusterConfig, nodeID string) *Controller {
@@ -30,7 +31,13 @@ func (c *Controller) Start(ctx context.Context) error {
 		return errors.New("controller already started")
 	}
 	workerCtx, cancel := context.WithCancel(ctx)
+	raftNode, err := NewRaftNodeFromConfig(c.cfg, c.nodeID)
+	if err != nil {
+		cancel()
+		return err
+	}
 	c.cancel = cancel
+	c.raft = raftNode
 	c.done = make(chan struct{})
 	go func() {
 		defer close(c.done)
@@ -47,11 +54,16 @@ func (c *Controller) Shutdown(ctx context.Context) error {
 	}
 	c.cancel()
 	done := c.done
+	raftNode := c.raft
 	c.cancel = nil
+	c.raft = nil
 	c.mu.Unlock()
 
 	select {
 	case <-done:
+		if raftNode != nil {
+			return raftNode.Shutdown()
+		}
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
