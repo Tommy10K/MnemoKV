@@ -27,25 +27,31 @@ type failureRecord struct {
 }
 
 type Observer struct {
-	peers        []config.PeerConfig
-	clients      map[string]NodeAPI
-	proposer     viewProposer
-	interval     time.Duration
-	failureAfter time.Duration
-	failureCount int
-	now          func() time.Time
+	peers         []config.PeerConfig
+	clients       map[string]NodeAPI
+	proposer      viewProposer
+	interval      time.Duration
+	failureAfter  time.Duration
+	failureCount  int
+	skewThreshold int
+	now           func() time.Time
 
 	mu       sync.Mutex
 	failures map[string]failureRecord
 }
 
 func NewObserver(cfg config.ClusterConfig, clients map[string]NodeAPI, proposer viewProposer) *Observer {
+	skewThreshold := cfg.Controller.RebalanceSkewThreshold
+	if skewThreshold <= 0 {
+		skewThreshold = 1
+	}
 	return &Observer{
 		peers: append([]config.PeerConfig(nil), cfg.Peers...), clients: clients, proposer: proposer,
 		interval:     time.Duration(cfg.Controller.ObserveIntervalMs) * time.Millisecond,
 		failureAfter: time.Duration(cfg.Controller.FailureTimeoutMs) * time.Millisecond,
 		failureCount: cfg.Controller.ConsecutiveFailures, now: time.Now,
-		failures: make(map[string]failureRecord, len(cfg.Peers)),
+		skewThreshold: skewThreshold,
+		failures:      make(map[string]failureRecord, len(cfg.Peers)),
 	}
 }
 
@@ -179,7 +185,7 @@ func (o *Observer) PollOnce(ctx context.Context) (ClusterView, error) {
 			view.Nodes[slot.ReplicaID] = replica
 		}
 	}
-	view.Status = summarizeStatus(view)
+	view.Status = summarizeStatusWithThreshold(view, o.skewThreshold)
 	return view, nil
 }
 

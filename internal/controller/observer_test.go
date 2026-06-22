@@ -222,7 +222,7 @@ func newFakeNodes(t *testing.T, slots []SlotStatus) (map[string]*fakeNode, []con
 func observerTestConfig(peers []config.PeerConfig) config.ClusterConfig {
 	return config.ClusterConfig{
 		Peers:      peers,
-		Controller: config.ControllerConfig{ObserveIntervalMs: 10, FailureTimeoutMs: 1000, ConsecutiveFailures: 2},
+		Controller: config.ControllerConfig{ObserveIntervalMs: 10, FailureTimeoutMs: 1000, ConsecutiveFailures: 2, RebalanceSkewThreshold: 2},
 	}
 }
 

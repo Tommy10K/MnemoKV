@@ -127,7 +127,7 @@ func updatePlanStatus(state *FSMSnapshot) {
 	if state.ActivePlan == nil {
 		return
 	}
-	if state.ActivePlan.Kind == PlanRebalance {
+	if state.ActivePlan.Kind == PlanKindRebalance {
 		state.LatestView.Status.State = StatusRebalancing
 		return
 	}

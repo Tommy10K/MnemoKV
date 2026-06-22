@@ -63,6 +63,10 @@ func ownerAvailable(nodes map[string]NodeView, nodeID string) bool {
 }
 
 func summarizeStatus(view ClusterView) StatusSummary {
+	return summarizeStatusWithThreshold(view, 1)
+}
+
+func summarizeStatusWithThreshold(view ClusterView, skewThreshold int) StatusSummary {
 	summary := StatusSummary{State: StatusHealthy}
 	for id, node := range view.Nodes {
 		switch {
@@ -85,10 +89,45 @@ func summarizeStatus(view ClusterView) StatusSummary {
 	switch {
 	case summary.UnavailableSlots > 0:
 		summary.State = StatusPotentialDataLoss
-	case len(summary.FailedNodes) > 0 || summary.DegradedSlots > 0:
+	case summary.DegradedSlots > 0:
 		summary.State = StatusDegraded
 	case len(summary.SuspectedNodes) > 0:
 		summary.State = StatusFailureSuspected
+	case placementSkew(view) > skewThreshold:
+		summary.State = StatusRebalancing
 	}
 	return summary
+}
+
+func placementSkew(view ClusterView) int {
+	leaders := make([]int, 0)
+	replicas := make([]int, 0)
+	for _, node := range view.Nodes {
+		if node.Eligible && node.Reachable && !node.Suspected {
+			leaders = append(leaders, node.LeaderSlots)
+			replicas = append(replicas, node.ReplicaSlots)
+		}
+	}
+	leaderSkew := countSkew(leaders)
+	replicaSkew := countSkew(replicas)
+	if replicaSkew > leaderSkew {
+		return replicaSkew
+	}
+	return leaderSkew
+}
+
+func countSkew(counts []int) int {
+	if len(counts) == 0 {
+		return 0
+	}
+	minimum, maximum := counts[0], counts[0]
+	for _, count := range counts[1:] {
+		if count < minimum {
+			minimum = count
+		}
+		if count > maximum {
+			maximum = count
+		}
+	}
+	return maximum - minimum
 }

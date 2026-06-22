@@ -5,8 +5,10 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/mnemokv/mnemokv/internal/config"
 )
 
 func TestPlanFailoverClassifiesAndOrdersSteps(t *testing.T) {
@@ -106,7 +108,7 @@ func TestPlannerQuorumDuplicateAndSupersession(t *testing.T) {
 
 	t.Run("no plan without quorum", func(t *testing.T) {
 		proposer := &plannerProposer{leader: true, state: FSMSnapshot{LatestView: initial}, proposeErr: raft.ErrLeadershipLost}
-		if err := NewPlanner(proposer, 0).Evaluate(); !errors.Is(err, raft.ErrLeadershipLost) {
+		if err := NewPlanner(proposer, config.ControllerConfig{}).Evaluate(); !errors.Is(err, raft.ErrLeadershipLost) {
 			t.Fatalf("evaluate error = %v", err)
 		}
 		if proposer.state.ActivePlan != nil {
@@ -117,7 +119,7 @@ func TestPlannerQuorumDuplicateAndSupersession(t *testing.T) {
 	t.Run("duplicate proposal suppressed", func(t *testing.T) {
 		plan, _ := PlanFailover(initial)
 		proposer := &plannerProposer{leader: true, state: FSMSnapshot{LatestView: initial, ActivePlan: &plan}}
-		if err := NewPlanner(proposer, 0).Evaluate(); err != nil {
+		if err := NewPlanner(proposer, config.ControllerConfig{}).Evaluate(); err != nil {
 			t.Fatal(err)
 		}
 		if len(proposer.commands) != 0 {
@@ -132,7 +134,7 @@ func TestPlannerQuorumDuplicateAndSupersession(t *testing.T) {
 			failedNode("node-1"), failedNode("node-2"), eligibleNode("node-3", 0, 0),
 		)
 		proposer := &plannerProposer{leader: true, state: FSMSnapshot{LatestView: second, ActivePlan: &active}}
-		if err := NewPlanner(proposer, 0).Evaluate(); err != nil {
+		if err := NewPlanner(proposer, config.ControllerConfig{}).Evaluate(); err != nil {
 			t.Fatal(err)
 		}
 		if len(proposer.commands) != 1 || proposer.commands[0].Type != CommandSupersedePlan {
@@ -142,6 +144,119 @@ func TestPlannerQuorumDuplicateAndSupersession(t *testing.T) {
 			t.Fatalf("plan was not superseded: %+v", proposer.state.ActivePlan)
 		}
 	})
+}
+
+func TestPlanRebalanceDetectsSkewAndCapsMoves(t *testing.T) {
+	view := skewedRebalanceView()
+	plan, ok := PlanRebalance(view, 1, 2)
+	if !ok {
+		t.Fatal("skewed placement produced no plan")
+	}
+	if plan.Kind != PlanKindRebalance || len(plan.WriteBlockedSlots) != 2 {
+		t.Fatalf("rebalance cap not honored: %+v", plan)
+	}
+	if len(plan.Steps) < 5 || plan.Steps[0].Kind != StepAssignReplica || plan.Steps[1].Kind != StepSync || plan.Steps[2].Kind != StepPromote {
+		t.Fatalf("leadership handoff sequence is incomplete: %+v", plan.Steps)
+	}
+	for _, step := range plan.Steps {
+		if step.Target == "node-1" {
+			t.Fatal("failed node was selected for rebalancing")
+		}
+	}
+}
+
+func TestPlanRebalanceRefusesBalancedOrUnreadyTopology(t *testing.T) {
+	balanced := plannerView(
+		[]SlotView{
+			{Number: 0, LeaderID: "node-2", ReplicaID: "node-3", ReplicaReady: true},
+			{Number: 1, LeaderID: "node-3", ReplicaID: "node-2", ReplicaReady: true},
+		},
+		failedNode("node-1"), eligibleNode("node-2", 1, 1), eligibleNode("node-3", 1, 1),
+	)
+	if plan, ok := PlanRebalance(balanced, 1, 10); ok {
+		t.Fatalf("balanced topology produced plan: %+v", plan)
+	}
+	balanced.Slots[0].ReplicaReady = false
+	balanced.Nodes["node-2"] = eligibleNode("node-2", 2, 0)
+	balanced.Nodes["node-3"] = eligibleNode("node-3", 0, 2)
+	if plan, ok := PlanRebalance(balanced, 1, 10); ok {
+		t.Fatalf("unready topology produced plan: %+v", plan)
+	}
+}
+
+func TestPlannerRebalancesAfterEligibleCooldownDespiteFailedNode(t *testing.T) {
+	view := skewedRebalanceView()
+	proposer := &plannerProposer{leader: true, state: FSMSnapshot{LatestView: view}}
+	planner := NewPlanner(proposer, config.ControllerConfig{ObserveIntervalMs: 1, FailureTimeoutMs: 100, RebalanceSkewThreshold: 1, MigrationRateLimit: 10})
+	now := time.Unix(5000, 0)
+	planner.now = func() time.Time { return now }
+	if err := planner.Evaluate(); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(99 * time.Millisecond)
+	if err := planner.Evaluate(); err != nil {
+		t.Fatal(err)
+	}
+	if len(proposer.commands) != 0 {
+		t.Fatal("rebalance started before cooldown")
+	}
+	now = now.Add(2 * time.Millisecond)
+	if err := planner.Evaluate(); err != nil {
+		t.Fatal(err)
+	}
+	if len(proposer.commands) != 1 || proposer.commands[0].Type != CommandProposeRebalance {
+		t.Fatalf("rebalance did not start with failed node excluded: %+v", proposer.commands)
+	}
+}
+
+func TestPlannerRefusesRebalanceWithActivePlanOrUnstableEligibleSet(t *testing.T) {
+	view := skewedRebalanceView()
+	active := RecoveryPlan{ID: "recovery", Kind: PlanKindRecovery}
+	proposer := &plannerProposer{leader: true, state: FSMSnapshot{LatestView: view, ActivePlan: &active}}
+	planner := NewPlanner(proposer, config.ControllerConfig{FailureTimeoutMs: 1, RebalanceSkewThreshold: 1, MigrationRateLimit: 10})
+	if err := planner.Evaluate(); err != nil {
+		t.Fatal(err)
+	}
+	if len(proposer.commands) != 0 {
+		t.Fatal("rebalance started with active recovery")
+	}
+	proposer.state.ActivePlan = nil
+	suspect := proposer.state.LatestView.Nodes["node-3"]
+	suspect.Suspected = true
+	proposer.state.LatestView.Nodes["node-3"] = suspect
+	if err := planner.Evaluate(); err != nil {
+		t.Fatal(err)
+	}
+	if len(proposer.commands) != 0 {
+		t.Fatal("rebalance started with unstable eligible set")
+	}
+}
+
+func skewedRebalanceView() ClusterView {
+	slots := []SlotView{
+		{Number: 0, LeaderID: "node-2", ReplicaID: "node-3", ReplicaReady: true},
+		{Number: 1, LeaderID: "node-2", ReplicaID: "node-3", ReplicaReady: true},
+		{Number: 2, LeaderID: "node-2", ReplicaID: "node-4", ReplicaReady: true},
+		{Number: 3, LeaderID: "node-2", ReplicaID: "node-4", ReplicaReady: true},
+		{Number: 4, LeaderID: "node-2", ReplicaID: "node-5", ReplicaReady: true},
+		{Number: 5, LeaderID: "node-3", ReplicaID: "node-2", ReplicaReady: true},
+		{Number: 6, LeaderID: "node-4", ReplicaID: "node-2", ReplicaReady: true},
+		{Number: 7, LeaderID: "node-5", ReplicaID: "node-2", ReplicaReady: true},
+	}
+	view := plannerView(slots,
+		failedNode("node-1"), eligibleNode("node-2", 0, 0), eligibleNode("node-3", 0, 0),
+		eligibleNode("node-4", 0, 0), eligibleNode("node-5", 0, 0),
+	)
+	for _, slot := range slots {
+		leader := view.Nodes[slot.LeaderID]
+		leader.LeaderSlots++
+		view.Nodes[slot.LeaderID] = leader
+		replica := view.Nodes[slot.ReplicaID]
+		replica.ReplicaSlots++
+		view.Nodes[slot.ReplicaID] = replica
+	}
+	view.Status = summarizeStatusWithThreshold(view, 1)
+	return view
 }
 
 func plannerView(slots []SlotView, nodes ...NodeView) ClusterView {

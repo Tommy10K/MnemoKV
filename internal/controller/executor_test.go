@@ -164,6 +164,36 @@ func TestExecutorMarksNoSurvivingCopyWithoutOwnershipCall(t *testing.T) {
 	}
 }
 
+func TestExecutorConvergesRebalanceWithinSkewThreshold(t *testing.T) {
+	view := skewedRebalanceView()
+	plan, ok := PlanRebalance(view, 1, 20)
+	if !ok {
+		t.Fatal("expected rebalance plan")
+	}
+	slots := make([]SlotStatus, len(view.Slots))
+	for i, slot := range view.Slots {
+		slots[i] = SlotStatus{Number: slot.Number, LeaderID: slot.LeaderID, ReplicaID: slot.ReplicaID, Term: 1, ReplicaReady: true}
+	}
+	cluster := newFakeAdminCluster(slots)
+	clients := cluster.clients("node-1", "node-2", "node-3", "node-4", "node-5")
+	proposer := newFSMProposerWithType(t, view, plan, CommandProposeRebalance)
+	if err := testExecutor(proposer, clients).ExecuteOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	finalView := viewFromClusterState(cluster.snapshot(), view.Nodes)
+	if skew := placementSkew(finalView); skew > 1 {
+		t.Fatalf("rebalance skew = %d, want <= 1; state=%+v", skew, cluster.snapshot().Slots)
+	}
+	if finalView.Status = summarizeStatusWithThreshold(finalView, 1); finalView.Status.State != StatusHealthy {
+		t.Fatalf("fully repaired and balanced cluster is not healthy: %+v", finalView.Status)
+	}
+	for _, slot := range cluster.snapshot().Slots {
+		if slot.LeaderID == slot.ReplicaID || !slot.ReplicaReady || slot.LeaderID == "node-1" || slot.ReplicaID == "node-1" {
+			t.Fatalf("rebalance violated write safety: %+v", slot)
+		}
+	}
+}
+
 func TestNodeClientSignsControlRequests(t *testing.T) {
 	secret := "controller-secret"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -221,10 +251,14 @@ type fsmProposer struct {
 }
 
 func newFSMProposer(t *testing.T, view ClusterView, plan RecoveryPlan) *fsmProposer {
+	return newFSMProposerWithType(t, view, plan, CommandProposePlan)
+}
+
+func newFSMProposerWithType(t *testing.T, view ClusterView, plan RecoveryPlan, commandType CommandType) *fsmProposer {
 	t.Helper()
 	p := &fsmProposer{leader: true, fsm: NewFSM()}
 	p.apply(t, CommandObserveView, view)
-	p.apply(t, CommandProposePlan, plan)
+	p.apply(t, commandType, plan)
 	return p
 }
 
@@ -479,6 +513,24 @@ func viewFromManagerMetadata(state cluster.MetadataSnapshot, failed string) Clus
 		view.Nodes[slot.ReplicaID] = replica
 	}
 	view.Status = summarizeStatus(view)
+	return view
+}
+
+func viewFromClusterState(state ClusterStateResponse, priorNodes map[string]NodeView) ClusterView {
+	view := ClusterView{MetadataVersion: state.MetadataVersion, Nodes: make(map[string]NodeView, len(priorNodes)), Slots: make([]SlotView, len(state.Slots))}
+	for id, prior := range priorNodes {
+		prior.LeaderSlots, prior.ReplicaSlots = 0, 0
+		view.Nodes[id] = prior
+	}
+	for i, slot := range state.Slots {
+		view.Slots[i] = SlotView{Number: slot.Number, LeaderID: slot.LeaderID, ReplicaID: slot.ReplicaID, Term: slot.Term, ReplicaReady: slot.ReplicaReady}
+		leader := view.Nodes[slot.LeaderID]
+		leader.LeaderSlots++
+		view.Nodes[slot.LeaderID] = leader
+		replica := view.Nodes[slot.ReplicaID]
+		replica.ReplicaSlots++
+		view.Nodes[slot.ReplicaID] = replica
+	}
 	return view
 }
 

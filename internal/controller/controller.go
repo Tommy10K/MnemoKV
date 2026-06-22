@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"time"
 
 	"github.com/mnemokv/mnemokv/internal/config"
 )
@@ -47,7 +46,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		cancel()
 		return err
 	}
-	planner := NewPlanner(raftNode, time.Duration(c.cfg.Controller.ObserveIntervalMs)*time.Millisecond)
+	planner := NewPlanner(raftNode, c.cfg.Controller)
 	executor, err := NewExecutorFromConfig(c.cfg, c.controlPlane.RequestSigningSecret, raftNode)
 	if err != nil {
 		_ = raftNode.Shutdown()

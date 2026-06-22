@@ -74,8 +74,8 @@ const (
 type PlanKind string
 
 const (
-	PlanRecovery  PlanKind = "recovery"
-	PlanRebalance PlanKind = "rebalance"
+	PlanKindRecovery  PlanKind = "recovery"
+	PlanKindRebalance PlanKind = "rebalance"
 )
 
 type PlanStep struct {
@@ -95,6 +95,8 @@ type RecoveryPlan struct {
 	Unrecoverable     []uint32     `json:"unrecoverable"`
 	WriteBlockedSlots []uint32     `json:"writeBlockedSlots,omitempty"`
 }
+
+type RebalancePlan = RecoveryPlan
 
 type CommandType string
 
