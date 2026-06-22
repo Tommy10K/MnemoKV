@@ -67,7 +67,7 @@ func main() {
 	}
 	var recoveryController *controller.Controller
 	if cfg.Cluster.Enabled && cfg.Cluster.FailoverMode == "automatic" {
-		recoveryController = controller.New(cfg.Cluster, cfg.Node.ID)
+		recoveryController = controller.New(cfg.Cluster, cfg.ControlPlane, cfg.Node.ID)
 		if err := recoveryController.Start(ctx); err != nil {
 			log.Fatalf("controller: start: %v", err)
 		}

@@ -73,6 +73,17 @@ func TestPlanFailoverHealthyClusterHasNoPlan(t *testing.T) {
 	}
 }
 
+func TestPlanFailoverResumesAssignedReplicaWithSyncOnly(t *testing.T) {
+	view := plannerView(
+		[]SlotView{{Number: 3, LeaderID: "node-2", ReplicaID: "node-3", ReplicaReady: false}},
+		failedNode("node-1"), eligibleNode("node-2", 1, 0), eligibleNode("node-3", 0, 1),
+	)
+	plan, ok := PlanFailover(view)
+	if !ok || len(plan.Steps) != 1 || plan.Steps[0].Kind != StepSync || plan.Steps[0].Target != "node-3" {
+		t.Fatalf("assigned replica should resume at sync: %+v", plan)
+	}
+}
+
 func TestPlanFailoverIsDeterministicAndUsesNodeIDTieBreak(t *testing.T) {
 	slots := []SlotView{{Number: 4, LeaderID: "node-1", ReplicaID: "node-2", ReplicaReady: true}}
 	left := plannerView(slots, failedNode("node-1"), eligibleNode("node-2", 1, 0), eligibleNode("node-4", 0, 0), eligibleNode("node-3", 0, 0))

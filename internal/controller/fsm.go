@@ -55,6 +55,7 @@ func (f *FSM) applyCommand(command Command) error {
 			plan.Done = make(map[int]bool)
 		}
 		f.state.ActivePlan = &plan
+		updatePlanStatus(&f.state)
 		return nil
 	case CommandStepDone:
 		var done StepDonePayload
@@ -68,6 +69,7 @@ func (f *FSM) applyCommand(command Command) error {
 			return fmt.Errorf("step index %d out of range", done.StepIndex)
 		}
 		f.state.ActivePlan.Done[done.StepIndex] = true
+		updatePlanStatus(&f.state)
 		return nil
 	case CommandPlanComplete:
 		var payload PlanIDPayload
@@ -77,6 +79,7 @@ func (f *FSM) applyCommand(command Command) error {
 		if f.state.ActivePlan == nil || f.state.ActivePlan.ID != payload.PlanID {
 			return fmt.Errorf("active plan %q not found", payload.PlanID)
 		}
+		f.state.LastCompletedPlanID = payload.PlanID
 		f.state.ActivePlan = nil
 		return nil
 	case CommandSupersedePlan:
@@ -94,6 +97,7 @@ func (f *FSM) applyCommand(command Command) error {
 			payload.NewPlan.Done = make(map[int]bool)
 		}
 		f.state.ActivePlan = &payload.NewPlan
+		updatePlanStatus(&f.state)
 		return nil
 	case CommandMarkUnavailable:
 		var slots []UnavailableSlot
@@ -116,6 +120,30 @@ func (f *FSM) applyCommand(command Command) error {
 		return nil
 	default:
 		return fmt.Errorf("unknown command type %q", command.Type)
+	}
+}
+
+func updatePlanStatus(state *FSMSnapshot) {
+	if state.ActivePlan == nil {
+		return
+	}
+	if state.ActivePlan.Kind == PlanRebalance {
+		state.LatestView.Status.State = StatusRebalancing
+		return
+	}
+	for index, step := range state.ActivePlan.Steps {
+		if state.ActivePlan.Done[index] {
+			continue
+		}
+		switch step.Kind {
+		case StepPromote:
+			state.LatestView.Status.State = StatusPromoting
+		case StepAssignReplica, StepSync:
+			state.LatestView.Status.State = StatusRepairing
+		case StepMarkUnavailable:
+			state.LatestView.Status.State = StatusPotentialDataLoss
+		}
+		return
 	}
 }
 

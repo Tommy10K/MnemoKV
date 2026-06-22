@@ -40,6 +40,10 @@ func PlanFailover(view ClusterView) (RecoveryPlan, bool) {
 				loads[target]++
 			}
 		case SlotReplicaLost:
+			if slot.ReplicaID != "" && ownerAvailable(view.Nodes, slot.ReplicaID) {
+				plan.Steps = append(plan.Steps, PlanStep{Kind: StepSync, Slot: slot.Number, Target: slot.ReplicaID})
+				continue
+			}
 			target, ok := leastLoadedEligible(view, loads, slot.LeaderID)
 			if ok {
 				plan.Steps = append(plan.Steps,
@@ -142,13 +146,20 @@ func (p *Planner) Evaluate() error {
 		return nil
 	}
 	if state.ActivePlan == nil {
+		if state.LastCompletedPlanID == plan.ID {
+			return nil
+		}
 		command, err := NewCommand(CommandProposePlan, plan)
 		if err != nil {
 			return err
 		}
 		return p.proposer.Propose(command)
 	}
-	if state.ActivePlan.ID == plan.ID || !hasNewConfirmedFailure(state.ActivePlan.DeadNodes, plan.DeadNodes) {
+	if state.ActivePlan.ID == plan.ID {
+		return nil
+	}
+	viewAdvanced := state.LatestView.MetadataVersion > state.ActivePlan.Epoch
+	if !viewAdvanced && !hasNewConfirmedFailure(state.ActivePlan.DeadNodes, plan.DeadNodes) {
 		return nil
 	}
 	command, err := NewCommand(CommandSupersedePlan, SupersedePlanPayload{OldPlanID: state.ActivePlan.ID, NewPlan: plan})
