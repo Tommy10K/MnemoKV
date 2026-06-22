@@ -69,7 +69,7 @@ func (f *FSM) applyCommand(command Command) error {
 		}
 		f.state.ActivePlan.Done[done.StepIndex] = true
 		return nil
-	case CommandPlanComplete, CommandSupersedePlan:
+	case CommandPlanComplete:
 		var payload PlanIDPayload
 		if err := json.Unmarshal(command.Payload, &payload); err != nil {
 			return err
@@ -78,6 +78,22 @@ func (f *FSM) applyCommand(command Command) error {
 			return fmt.Errorf("active plan %q not found", payload.PlanID)
 		}
 		f.state.ActivePlan = nil
+		return nil
+	case CommandSupersedePlan:
+		var payload SupersedePlanPayload
+		if err := json.Unmarshal(command.Payload, &payload); err != nil {
+			return err
+		}
+		if f.state.ActivePlan == nil || f.state.ActivePlan.ID != payload.OldPlanID {
+			return fmt.Errorf("active plan %q not found", payload.OldPlanID)
+		}
+		if payload.NewPlan.ID == "" {
+			return fmt.Errorf("replacement plan id is empty")
+		}
+		if payload.NewPlan.Done == nil {
+			payload.NewPlan.Done = make(map[int]bool)
+		}
+		f.state.ActivePlan = &payload.NewPlan
 		return nil
 	case CommandMarkUnavailable:
 		var slots []UnavailableSlot

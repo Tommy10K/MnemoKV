@@ -65,9 +65,17 @@ const (
 type StepKind string
 
 const (
-	StepPromote       StepKind = "promote"
-	StepAssignReplica StepKind = "assign_replica"
-	StepSync          StepKind = "sync"
+	StepPromote         StepKind = "promote"
+	StepAssignReplica   StepKind = "assign_replica"
+	StepSync            StepKind = "sync"
+	StepMarkUnavailable StepKind = "mark_unavailable"
+)
+
+type PlanKind string
+
+const (
+	PlanRecovery  PlanKind = "recovery"
+	PlanRebalance PlanKind = "rebalance"
 )
 
 type PlanStep struct {
@@ -77,13 +85,15 @@ type PlanStep struct {
 }
 
 type RecoveryPlan struct {
-	ID            string       `json:"id"`
-	Reason        string       `json:"reason"`
-	Epoch         uint64       `json:"epoch"`
-	DeadNodes     []string     `json:"deadNodes"`
-	Steps         []PlanStep   `json:"steps"`
-	Done          map[int]bool `json:"done"`
-	Unrecoverable []uint32     `json:"unrecoverable"`
+	ID                string       `json:"id"`
+	Kind              PlanKind     `json:"kind"`
+	Reason            string       `json:"reason"`
+	Epoch             uint64       `json:"epoch"`
+	DeadNodes         []string     `json:"deadNodes"`
+	Steps             []PlanStep   `json:"steps"`
+	Done              map[int]bool `json:"done"`
+	Unrecoverable     []uint32     `json:"unrecoverable"`
+	WriteBlockedSlots []uint32     `json:"writeBlockedSlots,omitempty"`
 }
 
 type CommandType string
@@ -116,6 +126,11 @@ type StepDonePayload struct {
 
 type PlanIDPayload struct {
 	PlanID string `json:"planId"`
+}
+
+type SupersedePlanPayload struct {
+	OldPlanID string       `json:"oldPlanId"`
+	NewPlan   RecoveryPlan `json:"newPlan"`
 }
 
 type ReturningNodePayload struct {

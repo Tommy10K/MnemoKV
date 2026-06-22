@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/mnemokv/mnemokv/internal/config"
 )
@@ -19,6 +20,7 @@ type Controller struct {
 	done     chan struct{}
 	raft     *RaftNode
 	observer *Observer
+	planner  *Planner
 }
 
 func New(cfg config.ClusterConfig, nodeID string) *Controller {
@@ -46,10 +48,16 @@ func (c *Controller) Start(ctx context.Context) error {
 		return err
 	}
 	c.observer = observer
+	planner := NewPlanner(raftNode, time.Duration(c.cfg.Controller.ObserveIntervalMs)*time.Millisecond)
+	c.planner = planner
 	c.done = make(chan struct{})
 	go func() {
 		defer close(c.done)
-		observer.Run(workerCtx)
+		var workers sync.WaitGroup
+		workers.Add(2)
+		go func() { defer workers.Done(); observer.Run(workerCtx) }()
+		go func() { defer workers.Done(); planner.Run(workerCtx) }()
+		workers.Wait()
 	}()
 	return nil
 }
@@ -66,6 +74,7 @@ func (c *Controller) Shutdown(ctx context.Context) error {
 	c.cancel = nil
 	c.raft = nil
 	c.observer = nil
+	c.planner = nil
 	c.mu.Unlock()
 
 	select {
