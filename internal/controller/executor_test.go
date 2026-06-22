@@ -22,7 +22,7 @@ import (
 )
 
 func TestExecutorWithRealManagersRestoresWritesAndReplicaData(t *testing.T) {
-	nodes, cfg := startManagerExecutorCluster(t)
+	nodes, cfg := startManagerExecutorCluster(t, 3, 3)
 	metadata := nodes[0].manager.Metadata()
 	slot := uint32(0)
 	before, _ := metadata.Slot(slot)
@@ -427,10 +427,13 @@ func writeManagerAdminResponse(w http.ResponseWriter, manager *cluster.Manager, 
 	})
 }
 
-func startManagerExecutorCluster(t *testing.T) ([]*managerExecutorNode, config.ClusterConfig) {
+func startManagerExecutorCluster(t *testing.T, nodeCount int, slotCount uint32) ([]*managerExecutorNode, config.ClusterConfig) {
 	t.Helper()
-	addresses := []string{reserveExecutorAddress(t), reserveExecutorAddress(t), reserveExecutorAddress(t)}
-	nodes := make([]*managerExecutorNode, 3)
+	addresses := make([]string, nodeCount)
+	for i := range addresses {
+		addresses[i] = reserveExecutorAddress(t)
+	}
+	nodes := make([]*managerExecutorNode, nodeCount)
 	for i := range nodes {
 		node := &managerExecutorNode{id: fmt.Sprintf("node-%d", i+1), reachable: true}
 		node.http = httptest.NewServer(http.HandlerFunc(node.serveHTTP))
@@ -440,7 +443,7 @@ func startManagerExecutorCluster(t *testing.T) ([]*managerExecutorNode, config.C
 	for i, node := range nodes {
 		peers[i] = config.PeerConfig{ID: node.id, Address: addresses[i], APIAddress: node.http.URL, FailoverMode: "automatic"}
 	}
-	cfg := config.ClusterConfig{ID: "executor-test", Enabled: true, ShardingEnabled: true, ReplicationEnabled: true, SlotCount: 3, RoutingMode: "proxy", FailoverMode: "automatic", Peers: peers}
+	cfg := config.ClusterConfig{ID: "executor-test", Enabled: true, ShardingEnabled: true, ReplicationEnabled: true, SlotCount: slotCount, RoutingMode: "proxy", FailoverMode: "automatic", Peers: peers}
 	for i, node := range nodes {
 		node.manager = cluster.NewManagerWithNode(cfg, node.id)
 		node.engine = engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noeviction"})
@@ -502,9 +505,17 @@ func keyForExactSlot(t *testing.T, metadata *cluster.Metadata, slot uint32) stri
 }
 
 func viewFromManagerMetadata(state cluster.MetadataSnapshot, failed string) ClusterView {
+	return viewFromManagerMetadataFailures(state, failed)
+}
+
+func viewFromManagerMetadataFailures(state cluster.MetadataSnapshot, failedIDs ...string) ClusterView {
+	failed := make(map[string]struct{}, len(failedIDs))
+	for _, id := range failedIDs {
+		failed[id] = struct{}{}
+	}
 	view := ClusterView{MetadataVersion: state.Version, Nodes: make(map[string]NodeView, len(state.Peers)), Slots: make([]SlotView, len(state.Slots))}
 	for _, peer := range state.Peers {
-		if peer.ID == failed {
+		if _, isFailed := failed[peer.ID]; isFailed {
 			view.Nodes[peer.ID] = failedNode(peer.ID)
 		} else {
 			view.Nodes[peer.ID] = eligibleNode(peer.ID, 0, 0)

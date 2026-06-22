@@ -53,5 +53,8 @@ func (s *Server) snapshotPayload() map[string]any {
 		out["counters"] = s.metrics.Snapshot()
 		out["rejectedWrites"] = s.metrics.Counter("eviction.rejected_writes")
 	}
+	if s.controllerStatus != nil {
+		out["recovery"] = s.controllerStatus.StatusSnapshot()
+	}
 	return out
 }

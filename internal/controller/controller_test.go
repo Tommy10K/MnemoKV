@@ -21,7 +21,7 @@ func TestControllerLifecycle(t *testing.T) {
 		Controller:   config.ControllerConfig{RaftDir: t.TempDir(), BootstrapNodeID: "node-1"},
 		Peers:        []config.PeerConfig{{ID: "node-1", APIAddress: "127.0.0.1:1", ControlAddress: address}},
 	}
-	c := New(cfg, config.ControlPlaneConfig{RequestSigningSecret: "secret"}, "node-1")
+	c := New(cfg, config.ControlPlaneConfig{RequestSigningSecret: "secret"}, "node-1", nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	if err := c.Start(ctx); err != nil {
 		t.Fatal(err)

@@ -25,20 +25,29 @@ type CommandExecutor interface {
 	Execute(*resp.Command) resp.Frame
 }
 
+type ControllerStatusProvider interface {
+	StatusSnapshot() controlplane.StatusSnapshot
+}
+
 type Server struct {
-	cfg          config.ObservabilityConfig
-	node         config.NodeConfig
-	cluster      config.ClusterConfig
-	controlPlane config.ControlPlaneConfig
-	engine       *engine.Engine
-	executor     CommandExecutor
-	metrics      *metrics.InMemory
-	cluMgr       *cluster.Manager
-	snapshots    Snapshotter
-	fence        *controlplane.FenceStore
-	fenceErr     error
+	cfg              config.ObservabilityConfig
+	node             config.NodeConfig
+	cluster          config.ClusterConfig
+	controlPlane     config.ControlPlaneConfig
+	engine           *engine.Engine
+	executor         CommandExecutor
+	metrics          *metrics.InMemory
+	cluMgr           *cluster.Manager
+	snapshots        Snapshotter
+	fence            *controlplane.FenceStore
+	fenceErr         error
+	controllerStatus ControllerStatusProvider
 
 	httpSrv *http.Server
+}
+
+func (s *Server) SetControllerStatusProvider(provider ControllerStatusProvider) {
+	s.controllerStatus = provider
 }
 
 func New(cfg config.ObservabilityConfig, node config.NodeConfig, clusterCfg config.ClusterConfig, controlPlaneCfg config.ControlPlaneConfig, eng *engine.Engine, sink *metrics.InMemory, cluMgr *cluster.Manager, snapshots Snapshotter) *Server {

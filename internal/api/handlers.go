@@ -40,10 +40,10 @@ func (s *Server) handleMetricsSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.metrics == nil {
-		writeJSON(w, http.StatusOK, MetricsSummary{Counters: map[string]uint64{}})
+		writeJSON(w, http.StatusOK, MetricsSummary{Counters: map[string]uint64{}, Gauges: map[string]float64{}})
 		return
 	}
-	writeJSON(w, http.StatusOK, MetricsSummary{Counters: s.metrics.Snapshot()})
+	writeJSON(w, http.StatusOK, MetricsSummary{Counters: s.metrics.Snapshot(), Gauges: s.metrics.GaugesSnapshot()})
 }
 
 func (s *Server) handleClusterState(w http.ResponseWriter, r *http.Request) {
@@ -77,6 +77,10 @@ func (s *Server) handleClusterState(w http.ResponseWriter, r *http.Request) {
 				resp.Slots[i] = slotStatus(metadata, slot)
 			}
 		}
+	}
+	if s.controllerStatus != nil {
+		status := s.controllerStatus.StatusSnapshot()
+		resp.Recovery = &status
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

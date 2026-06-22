@@ -71,6 +71,15 @@ go run ./cmd/node -config configs/standalone-low-memory.yaml
 Snapshot persistence is not a write-ahead log. Cluster failover is manual: promote the surviving
 assigned replica, assign a replacement, then transfer a full slot snapshot.
 
+## Experimental Automatic Recovery
+
+The five `configs/cluster-node-{1..5}-auto.yaml` presets enable the embedded Raft controller. Manual
+mode remains the default. Automatic recovery preserves one leader and one synchronous replica per
+slot, so its data guarantee is **one node failure at a time with repair in between**. A second
+destructive failure before repair completes can remove the last reachable copy of a slot; that slot
+is reported as `potential_data_loss` and is never recreated empty. Unaffected slots continue serving,
+and a returning node's old application data is not trusted or merged in v1.
+
 ## Benchmark Import
 
 The Benchmarks page accepts raw `go test -bench -benchmem` output or JSON. Use **Load built-in

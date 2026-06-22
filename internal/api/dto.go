@@ -1,5 +1,7 @@
 package api
 
+import "github.com/mnemokv/mnemokv/internal/controlplane"
+
 type HealthResponse struct {
 	Status string `json:"status"`
 	NodeID string `json:"nodeId"`
@@ -16,20 +18,22 @@ type EngineStateResponse struct {
 }
 
 type MetricsSummary struct {
-	Counters map[string]uint64 `json:"counters"`
+	Counters map[string]uint64  `json:"counters"`
+	Gauges   map[string]float64 `json:"gauges,omitempty"`
 }
 
 type ClusterStateResponse struct {
-	Enabled         bool         `json:"enabled"`
-	NodeID          string       `json:"nodeId"`
-	ClusterID       string       `json:"clusterId,omitempty"`
-	SlotCount       uint32       `json:"slotCount,omitempty"`
-	MetadataVersion uint64       `json:"metadataVersion,omitempty"`
-	RoutingMode     string       `json:"routingMode,omitempty"`
-	FailoverMode    string       `json:"failoverMode,omitempty"`
-	Peers           []string     `json:"peers"`
-	Membership      []PeerStatus `json:"membership,omitempty"`
-	Slots           []SlotStatus `json:"slots,omitempty"`
+	Enabled         bool                         `json:"enabled"`
+	NodeID          string                       `json:"nodeId"`
+	ClusterID       string                       `json:"clusterId,omitempty"`
+	SlotCount       uint32                       `json:"slotCount,omitempty"`
+	MetadataVersion uint64                       `json:"metadataVersion,omitempty"`
+	RoutingMode     string                       `json:"routingMode,omitempty"`
+	FailoverMode    string                       `json:"failoverMode,omitempty"`
+	Peers           []string                     `json:"peers"`
+	Membership      []PeerStatus                 `json:"membership,omitempty"`
+	Slots           []SlotStatus                 `json:"slots,omitempty"`
+	Recovery        *controlplane.StatusSnapshot `json:"recovery,omitempty"`
 }
 
 type SlotStatus struct {

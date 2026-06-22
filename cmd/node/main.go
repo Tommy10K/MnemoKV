@@ -56,8 +56,15 @@ func main() {
 	if cfg.Cluster.Enabled {
 		commandExecutor = clusterMgr.Coordinator()
 	}
+	var recoveryController *controller.Controller
+	if cfg.Cluster.Enabled && cfg.Cluster.FailoverMode == "automatic" {
+		recoveryController = controller.New(cfg.Cluster, cfg.ControlPlane, cfg.Node.ID, sink)
+	}
 	srv := server.New(cfg.Network, commandExecutor, sink)
 	apiSrv := api.New(cfg.Observability, cfg.Node, cfg.Cluster, cfg.ControlPlane, eng, sink, clusterMgr, snapshotMgr)
+	if recoveryController != nil {
+		apiSrv.SetControllerStatusProvider(recoveryController)
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -65,9 +72,7 @@ func main() {
 	if err := clusterMgr.Start(ctx); err != nil {
 		log.Fatalf("cluster: start: %v", err)
 	}
-	var recoveryController *controller.Controller
-	if cfg.Cluster.Enabled && cfg.Cluster.FailoverMode == "automatic" {
-		recoveryController = controller.New(cfg.Cluster, cfg.ControlPlane, cfg.Node.ID)
+	if recoveryController != nil {
 		if err := recoveryController.Start(ctx); err != nil {
 			log.Fatalf("controller: start: %v", err)
 		}

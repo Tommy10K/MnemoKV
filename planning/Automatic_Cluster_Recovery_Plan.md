@@ -605,13 +605,13 @@ continue through recovery, slots that lost their last copy are marked `unavailab
 `potential_data_loss` (never recreated empty), unaffected slots keep serving, and the status/API/
 events/logs report the condition with the right detail.
 
-- [ ] On every committed view change, re-classify all slots (§5) against the **current** eligible set and available copies. If the change invalidates the active plan, commit `SupersedePlan`, stop its executor, and replace it with a plan based on actual surviving copies rather than old assumptions.
-- [ ] Slot outcomes on a second failure: leader-failed/replica-alive → recoverable via promotion; replica-failed/leader-alive → degraded but safe; **both unavailable → `MarkUnavailable`** (no empty leader); both available → unaffected.
-- [ ] In v1, `unavailable` remains a controller/status classification rather than a new persisted slot-metadata state: commands still fail through the existing unreachable-owner/replica path, while API/UI/events explain the affected slots explicitly. Do not add a new command-path gate or application snapshot field; unaffected slots keep serving and the rest of the cluster stays alive.
-- [ ] Status/API/events/metrics/logs report: affected slots, former leader+replica, which failures caused it, that returning-node data is not used for recovery in v1, and which commands are rejected. Keep `potential_data_loss` as the honest "no authoritative copy currently reachable" warning; a returning node does not automatically resolve it.
-- [ ] Clarify the boundary in docs: the supported guarantee is **one failure at a time with repair in between**; the unsupported case is a second destructive failure *before repair completes*. This is temporal, not about which node IDs fail.
-- [ ] Tests (in the §18 harness): second failure during repair → recoverable slots continue, last-copy slots become unavailable with warnings, cluster otherwise operational; reads/writes to affected vs unaffected slots behave per §3.10.
-- [ ] **Verify.**
+- [x] On every committed view change, re-classify all slots (§5) against the **current** eligible set and available copies. If the change invalidates the active plan, commit `SupersedePlan`, stop its executor, and replace it with a plan based on actual surviving copies rather than old assumptions.
+- [x] Slot outcomes on a second failure: leader-failed/replica-alive → recoverable via promotion; replica-failed/leader-alive → degraded but safe; **both unavailable → `MarkUnavailable`** (no empty leader); both available → unaffected.
+- [x] In v1, `unavailable` remains a controller/status classification rather than a new persisted slot-metadata state: commands still fail through the existing unreachable-owner/replica path, while API/UI/events explain the affected slots explicitly. Do not add a new command-path gate or application snapshot field; unaffected slots keep serving and the rest of the cluster stays alive.
+- [x] Status/API/events/metrics/logs report: affected slots, former leader+replica, which failures caused it, that returning-node data is not used for recovery in v1, and which commands are rejected. Keep `potential_data_loss` as the honest "no authoritative copy currently reachable" warning; a returning node does not automatically resolve it.
+- [x] Clarify the boundary in docs: the supported guarantee is **one failure at a time with repair in between**; the unsupported case is a second destructive failure *before repair completes*. This is temporal, not about which node IDs fail.
+- [x] Tests (in the §18 harness): second failure during repair → recoverable slots continue, last-copy slots become unavailable with warnings, cluster otherwise operational; reads/writes to affected vs unaffected slots behave per §3.10.
+- [x] **Verify.**
 
 ---
 
@@ -761,3 +761,6 @@ build/lint flow unless Phase 10's UI work is undertaken; if it is, follow the fr
   for explicit detection of a completely deleted `RaftDir`: a fresh non-bootstrap voter and a voter
   whose entire directory was removed are not yet distinguishable without a sentinel outside that
   directory. The controller does not perform an automatic membership rewrite.
+- Phase 7 is implemented and verified with a real five-manager overlapping-failure scenario. Slots
+  with no reachable authoritative copy remain assigned to their former owners and report
+  `potential_data_loss`; surviving-copy slots recover and unaffected slots continue serving.
