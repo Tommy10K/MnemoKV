@@ -55,6 +55,85 @@ func TestFiveMemberRaftFSMAndQuorum(t *testing.T) {
 	}
 }
 
+func TestFiveMemberRaftPartitionShapes(t *testing.T) {
+	nodes, transports := newInmemRaftCluster(t, 5)
+	leader := waitForLeader(t, nodes)
+	leaderIndex := 0
+	for i, node := range nodes {
+		if node == leader {
+			leaderIndex = i
+			break
+		}
+	}
+	majority := []int{leaderIndex}
+	minority := make([]int, 0, 2)
+	for i := range nodes {
+		if i == leaderIndex {
+			continue
+		}
+		if len(majority) < 3 {
+			majority = append(majority, i)
+		} else {
+			minority = append(minority, i)
+		}
+	}
+	partitionTransports(transports, majority, minority)
+	command, _ := NewCommand(CommandObserveView, ClusterView{MetadataVersion: 30})
+	if err := leader.Propose(command); err != nil {
+		t.Fatalf("3-2 majority did not proceed: %v", err)
+	}
+
+	reconnectTransports(transports)
+	waitForState(t, nodes, func(state FSMSnapshot) bool { return state.LatestView.MetadataVersion == 30 })
+	leader = waitForLeader(t, nodes)
+	leaderIndex = 0
+	for i, node := range nodes {
+		if node == leader {
+			leaderIndex = i
+			break
+		}
+	}
+	remaining := make([]int, 0, 4)
+	for i := range nodes {
+		if i != leaderIndex {
+			remaining = append(remaining, i)
+		}
+	}
+	groupA := []int{leaderIndex, remaining[0]}
+	groupB := []int{remaining[1], remaining[2]}
+	groupC := []int{remaining[3]}
+	partitionTransports(transports, groupA, append(append([]int{}, groupB...), groupC...))
+	partitionTransports(transports, groupB, groupC)
+	command, _ = NewCommand(CommandObserveView, ClusterView{MetadataVersion: 31})
+	if err := leader.Propose(command); err == nil {
+		t.Fatal("2-2-1 partition unexpectedly committed")
+	}
+	for _, node := range nodes {
+		if node.State().LatestView.MetadataVersion == 31 {
+			t.Fatal("ownership advanced without a partition majority")
+		}
+	}
+}
+
+func partitionTransports(transports []*raft.InmemTransport, left, right []int) {
+	for _, i := range left {
+		for _, j := range right {
+			transports[i].Disconnect(transports[j].LocalAddr())
+			transports[j].Disconnect(transports[i].LocalAddr())
+		}
+	}
+}
+
+func reconnectTransports(transports []*raft.InmemTransport) {
+	for i := range transports {
+		for j := range transports {
+			if i != j {
+				transports[i].Connect(transports[j].LocalAddr(), transports[j])
+			}
+		}
+	}
+}
+
 func TestFSMSnapshotRestoreRoundTrip(t *testing.T) {
 	fsm := NewFSM()
 	command, _ := NewCommand(CommandMarkUnavailable, []UnavailableSlot{{Slot: 12, LeaderID: "n1", ReplicaID: "n2", Failures: []string{"n1", "n2"}}})

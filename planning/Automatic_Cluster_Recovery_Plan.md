@@ -643,19 +643,19 @@ spawning OS processes, for fast, reliable CI-style coverage of the whole lifecyc
 [`test/cluster/cluster_test.go`](../test/cluster/cluster_test.go)) + a 5-member in-memory Raft
 controller group, and drives the scenarios below to green.
 
-- [ ] Harness helper under `test/controller/` (or `internal/controller/harness_test.go`) wiring real `cluster.Manager` instances behind `httptest` servers exposing the existing API routes; `raft.InmemTransport` + injectable clocks so nothing flakes.
-- [ ] Scenario tests:
-  - [ ] **Single leader-node failure:** promotion, repair, and rebalance → ≈256 leaders + ≈256 replicas per surviving node; every slot has two distinct healthy owners; failed node owns zero slots.
-  - [ ] **Replica-holder failure:** a node holding replicas for otherwise-healthy leaders fails → replicas replaced and synced, leaders untouched.
-  - [ ] **Sequential failures with full repair between** → each recovered the same way.
-  - [ ] **Second failure during repair** → recoverable slots continue; last-copy slots become `unavailable`/`potential_data_loss` with visible warnings; cluster otherwise operational.
-  - [ ] **Raft leader failure during promotion** and **controller restart during synchronization** → recovery completes exactly once (resumable, idempotent).
-  - [ ] **Duplicate recovery-plan execution** → no-op.
-  - [ ] **Raft partitions:** with 1–2 voters unavailable, the remaining majority proceeds; with 3 unavailable, no quorum exists and ownership freezes. In a 3–2 split only the 3-voter side proceeds; in a 2–2–1 split every side freezes. Test controller-only partition vs. full node death separately.
-  - [ ] **Stale node returning** after topology advanced → preserve identity but clear old application data/snapshots, no reclaim or lost-data recovery, admit only after validation, then 4→5 rebalance from authoritative nodes.
-  - [ ] **Writes during recovery** → affected slots reject writes until their replica is ready; unaffected slots keep serving; reads behave per §3.10.
-  - [ ] **Manual commands rejected in automatic mode**; allowed in manual mode.
-- [ ] **Verify** with `go test -race ./internal/controller/... ./test/controller/...`.
+- [x] Harness helper under `test/controller/` (or `internal/controller/harness_test.go`) wiring real `cluster.Manager` instances behind `httptest` servers exposing the existing API routes; `raft.InmemTransport` + injectable clocks so nothing flakes.
+- [x] Scenario tests:
+  - [x] **Single leader-node failure:** promotion, repair, and rebalance → ≈256 leaders + ≈256 replicas per surviving node; every slot has two distinct healthy owners; failed node owns zero slots.
+  - [x] **Replica-holder failure:** a node holding replicas for otherwise-healthy leaders fails → replicas replaced and synced, leaders untouched.
+  - [x] **Sequential failures with full repair between** → each recovered the same way.
+  - [x] **Second failure during repair** → recoverable slots continue; last-copy slots become `unavailable`/`potential_data_loss` with visible warnings; cluster otherwise operational.
+  - [x] **Raft leader failure during promotion** and **controller restart during synchronization** → recovery completes exactly once (resumable, idempotent).
+  - [x] **Duplicate recovery-plan execution** → no-op.
+  - [x] **Raft partitions:** with 1–2 voters unavailable, the remaining majority proceeds; with 3 unavailable, no quorum exists and ownership freezes. In a 3–2 split only the 3-voter side proceeds; in a 2–2–1 split every side freezes. Test controller-only partition vs. full node death separately.
+  - [x] **Stale node returning** after topology advanced → preserve identity but clear old application data/snapshots, no reclaim or lost-data recovery, admit only after validation, then 4→5 rebalance from authoritative nodes.
+  - [x] **Writes during recovery** → affected slots reject writes until their replica is ready; unaffected slots keep serving; reads behave per §3.10.
+  - [x] **Manual commands rejected in automatic mode**; allowed in manual mode.
+- [x] **Verify** with `go test -race ./internal/controller/... ./test/controller/...`.
 
 ---
 

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/mnemokv/mnemokv/internal/api"
 	"github.com/mnemokv/mnemokv/internal/cluster"
 	"github.com/mnemokv/mnemokv/internal/config"
 	"github.com/mnemokv/mnemokv/internal/engine"
@@ -147,6 +148,25 @@ func TestExecutorRetriesAfterTransientServerFailure(t *testing.T) {
 	}
 	if proposer.State().ActivePlan != nil {
 		t.Fatal("executor did not resume the plan")
+	}
+}
+
+func TestExecutorControllerRestartDuringSynchronization(t *testing.T) {
+	view, cluster, clients := executorScenario()
+	cluster.failNext = map[StepKind]int{StepSync: 1}
+	plan, _ := PlanFailover(view)
+	proposer := newFSMProposer(t, view, plan)
+	if err := testExecutor(proposer, clients).ExecuteOnce(context.Background()); err == nil {
+		t.Fatal("expected synchronization interruption")
+	}
+	// A fresh executor models an embedded controller process restart. Its only
+	// source of progress is the committed FSM state.
+	restarted := testExecutor(proposer, clients)
+	if err := restarted.ExecuteOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if proposer.State().ActivePlan != nil || cluster.callCount(StepPromote) != 1 {
+		t.Fatalf("restart duplicated committed work: calls=%v", cluster.calls)
 	}
 }
 
@@ -359,6 +379,7 @@ type managerExecutorNode struct {
 	resp      *server.Server
 	cancel    context.CancelFunc
 	http      *httptest.Server
+	handler   http.Handler
 	reachable bool
 }
 
@@ -376,55 +397,11 @@ func (n *managerExecutorNode) serveHTTP(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	state := n.manager.Metadata().Snapshot()
-	switch {
-	case r.Method == http.MethodGet && r.URL.Path == "/health":
-		_ = json.NewEncoder(w).Encode(HealthResponse{Status: "ok", NodeID: n.id, Mode: "clustered"})
-	case r.Method == http.MethodGet && r.URL.Path == "/cluster/state":
-		slots := make([]SlotStatus, len(state.Slots))
-		for i, slot := range state.Slots {
-			slots[i] = SlotStatus{Number: slot.Number, LeaderID: slot.LeaderID, ReplicaID: slot.ReplicaID, Term: slot.Term, ReplicaReady: slot.ReplicaReady}
-		}
-		_ = json.NewEncoder(w).Encode(ClusterStateResponse{Enabled: true, NodeID: n.id, ClusterID: state.ClusterID, SlotCount: state.SlotCount, MetadataVersion: state.Version, Slots: slots})
-	case r.Method == http.MethodPost && r.URL.Path == "/cluster/promote":
-		var request struct {
-			Slot uint32 `json:"slot"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&request)
-		updated, failed, err := n.manager.Promote(r.Context(), request.Slot)
-		writeManagerAdminResponse(w, n.manager, updated, request.Slot, failed, err)
-	case r.Method == http.MethodPost && (r.URL.Path == "/cluster/replica" || r.URL.Path == "/cluster/sync"):
-		var request struct {
-			Slot   uint32 `json:"slot"`
-			NodeID string `json:"nodeId"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&request)
-		var updated cluster.MetadataSnapshot
-		var failed []string
-		var err error
-		if r.URL.Path == "/cluster/replica" {
-			updated, failed, err = n.manager.AssignReplica(r.Context(), request.Slot, request.NodeID)
-		} else {
-			updated, failed, err = n.manager.SyncReplica(r.Context(), request.Slot, request.NodeID)
-		}
-		writeManagerAdminResponse(w, n.manager, updated, request.Slot, failed, err)
-	default:
-		http.NotFound(w, r)
-	}
-}
-
-func writeManagerAdminResponse(w http.ResponseWriter, manager *cluster.Manager, state cluster.MetadataSnapshot, number uint32, failed []string, err error) {
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if n.handler == nil {
+		http.Error(w, "starting", http.StatusServiceUnavailable)
 		return
 	}
-	slot, _ := manager.Metadata().Slot(number)
-	_ = json.NewEncoder(w).Encode(ClusterAdminResponse{
-		MetadataVersion: state.Version,
-		Slot:            SlotStatus{Number: slot.Number, LeaderID: slot.LeaderID, ReplicaID: slot.ReplicaID, Term: slot.Term, ReplicaReady: slot.ReplicaReady},
-		FailedPeers:     failed,
-	})
+	n.handler.ServeHTTP(w, r)
 }
 
 func startManagerExecutorCluster(t *testing.T, nodeCount int, slotCount uint32) ([]*managerExecutorNode, config.ClusterConfig) {
@@ -445,9 +422,14 @@ func startManagerExecutorCluster(t *testing.T, nodeCount int, slotCount uint32) 
 	}
 	cfg := config.ClusterConfig{ID: "executor-test", Enabled: true, ShardingEnabled: true, ReplicationEnabled: true, SlotCount: slotCount, RoutingMode: "proxy", FailoverMode: "automatic", Peers: peers}
 	for i, node := range nodes {
-		node.manager = cluster.NewManagerWithNode(cfg, node.id)
+		nodeCfg := cfg
+		nodeCfg.Controller.RaftDir = t.TempDir()
+		node.manager = cluster.NewManagerWithNode(nodeCfg, node.id)
 		node.engine = engine.New(config.EngineConfig{StripeCount: 4, EvictionPolicy: "noeviction"})
 		node.manager.AttachEngine(node.engine)
+		apiServer := api.New(config.ObservabilityConfig{}, config.NodeConfig{ID: node.id, Mode: "clustered"}, nodeCfg,
+			config.ControlPlaneConfig{RequestSigningSecret: "secret"}, node.engine, metrics.NewInMemory(32), node.manager, nil)
+		node.handler = apiServer.Handler()
 		host, portText, _ := net.SplitHostPort(addresses[i])
 		var port int
 		_, _ = fmt.Sscanf(portText, "%d", &port)
