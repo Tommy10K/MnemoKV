@@ -14,10 +14,11 @@ type Controller struct {
 	cfg    config.ClusterConfig
 	nodeID string
 
-	mu     sync.Mutex
-	cancel context.CancelFunc
-	done   chan struct{}
-	raft   *RaftNode
+	mu       sync.Mutex
+	cancel   context.CancelFunc
+	done     chan struct{}
+	raft     *RaftNode
+	observer *Observer
 }
 
 func New(cfg config.ClusterConfig, nodeID string) *Controller {
@@ -38,10 +39,17 @@ func (c *Controller) Start(ctx context.Context) error {
 	}
 	c.cancel = cancel
 	c.raft = raftNode
+	observer, err := NewObserverFromConfig(c.cfg, raftNode)
+	if err != nil {
+		_ = raftNode.Shutdown()
+		cancel()
+		return err
+	}
+	c.observer = observer
 	c.done = make(chan struct{})
 	go func() {
 		defer close(c.done)
-		<-workerCtx.Done()
+		observer.Run(workerCtx)
 	}()
 	return nil
 }
@@ -57,6 +65,7 @@ func (c *Controller) Shutdown(ctx context.Context) error {
 	raftNode := c.raft
 	c.cancel = nil
 	c.raft = nil
+	c.observer = nil
 	c.mu.Unlock()
 
 	select {

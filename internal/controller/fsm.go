@@ -29,11 +29,16 @@ func (f *FSM) Apply(log *raft.Log) any {
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	latestOperation := f.state.LatestView.Status.LatestCommittedOperation
 	if err := f.applyCommand(command); err != nil {
 		return err
 	}
 	f.state.ControlIndex = log.Index
-	f.state.LatestView.Status.LatestCommittedOperation = string(command.Type)
+	if command.Type == CommandObserveView {
+		f.state.LatestView.Status.LatestCommittedOperation = latestOperation
+	} else {
+		f.state.LatestView.Status.LatestCommittedOperation = string(command.Type)
+	}
 	return nil
 }
 

@@ -19,7 +19,7 @@ func TestControllerLifecycle(t *testing.T) {
 	cfg := config.ClusterConfig{
 		FailoverMode: "automatic",
 		Controller:   config.ControllerConfig{RaftDir: t.TempDir(), BootstrapNodeID: "node-1"},
-		Peers:        []config.PeerConfig{{ID: "node-1", ControlAddress: address}},
+		Peers:        []config.PeerConfig{{ID: "node-1", APIAddress: "127.0.0.1:1", ControlAddress: address}},
 	}
 	c := New(cfg, "node-1")
 	ctx, cancel := context.WithCancel(context.Background())
