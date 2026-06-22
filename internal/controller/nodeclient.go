@@ -3,9 +3,6 @@ package controller
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mnemokv/mnemokv/internal/controlplane"
 )
 
 type HealthResponse struct {
@@ -74,8 +73,8 @@ func NewAuthenticatedNodeClient(address string, timeout time.Duration, secret st
 }
 
 const (
-	ControlIndexHeader     = "X-MnemoKV-Control-Index"
-	ControlSignatureHeader = "X-MnemoKV-Control-Signature"
+	ControlIndexHeader     = controlplane.ControlIndexHeader
+	ControlSignatureHeader = controlplane.ControlSignatureHeader
 )
 
 type ClusterAdminResponse struct {
@@ -148,15 +147,7 @@ func (c *NodeClient) postAdmin(ctx context.Context, path string, payload any, co
 }
 
 func signControlRequest(secret []byte, method, path string, body []byte, index string) string {
-	mac := hmac.New(sha256.New, secret)
-	_, _ = mac.Write([]byte(method))
-	_, _ = mac.Write([]byte{'\n'})
-	_, _ = mac.Write([]byte(path))
-	_, _ = mac.Write([]byte{'\n'})
-	_, _ = mac.Write([]byte(index))
-	_, _ = mac.Write([]byte{'\n'})
-	_, _ = mac.Write(body)
-	return hex.EncodeToString(mac.Sum(nil))
+	return controlplane.Sign(secret, method, path, body, index)
 }
 
 func (c *NodeClient) Health(ctx context.Context) (HealthResponse, error) {

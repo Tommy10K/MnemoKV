@@ -9,6 +9,7 @@ import (
 
 	"github.com/mnemokv/mnemokv/internal/cluster"
 	"github.com/mnemokv/mnemokv/internal/config"
+	"github.com/mnemokv/mnemokv/internal/controlplane"
 	"github.com/mnemokv/mnemokv/internal/engine"
 	"github.com/mnemokv/mnemokv/internal/logging"
 	"github.com/mnemokv/mnemokv/internal/metrics"
@@ -25,36 +26,47 @@ type CommandExecutor interface {
 }
 
 type Server struct {
-	cfg       config.ObservabilityConfig
-	node      config.NodeConfig
-	cluster   config.ClusterConfig
-	engine    *engine.Engine
-	executor  CommandExecutor
-	metrics   *metrics.InMemory
-	cluMgr    *cluster.Manager
-	snapshots Snapshotter
+	cfg          config.ObservabilityConfig
+	node         config.NodeConfig
+	cluster      config.ClusterConfig
+	controlPlane config.ControlPlaneConfig
+	engine       *engine.Engine
+	executor     CommandExecutor
+	metrics      *metrics.InMemory
+	cluMgr       *cluster.Manager
+	snapshots    Snapshotter
+	fence        *controlplane.FenceStore
+	fenceErr     error
 
 	httpSrv *http.Server
 }
 
-func New(cfg config.ObservabilityConfig, node config.NodeConfig, clusterCfg config.ClusterConfig, eng *engine.Engine, sink *metrics.InMemory, cluMgr *cluster.Manager, snapshots Snapshotter) *Server {
+func New(cfg config.ObservabilityConfig, node config.NodeConfig, clusterCfg config.ClusterConfig, controlPlaneCfg config.ControlPlaneConfig, eng *engine.Engine, sink *metrics.InMemory, cluMgr *cluster.Manager, snapshots Snapshotter) *Server {
 	executor := CommandExecutor(eng)
 	if cluMgr != nil && cluMgr.Enabled() && cluMgr.Coordinator() != nil {
 		executor = cluMgr.Coordinator()
 	}
-	return &Server{
-		cfg:       cfg,
-		node:      node,
-		cluster:   clusterCfg,
-		engine:    eng,
-		executor:  executor,
-		metrics:   sink,
-		cluMgr:    cluMgr,
-		snapshots: snapshots,
+	server := &Server{
+		cfg:          cfg,
+		node:         node,
+		cluster:      clusterCfg,
+		controlPlane: controlPlaneCfg,
+		engine:       eng,
+		executor:     executor,
+		metrics:      sink,
+		cluMgr:       cluMgr,
+		snapshots:    snapshots,
 	}
+	if clusterCfg.Enabled && clusterCfg.FailoverMode == "automatic" {
+		server.fence, server.fenceErr = controlplane.OpenFenceStore(clusterCfg.Controller.RaftDir)
+	}
+	return server
 }
 
 func (s *Server) Start(ctx context.Context) error {
+	if s.fenceErr != nil {
+		return fmt.Errorf("control-plane fencing: %w", s.fenceErr)
+	}
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
 
@@ -104,7 +116,7 @@ func withCORS(next http.Handler) http.Handler {
 		h := w.Header()
 		h.Set("Access-Control-Allow-Origin", "*")
 		h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		h.Set("Access-Control-Allow-Headers", "Content-Type")
+		h.Set("Access-Control-Allow-Headers", "Content-Type, X-MnemoKV-Control-Index, X-MnemoKV-Control-Signature")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

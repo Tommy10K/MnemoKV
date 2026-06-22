@@ -96,6 +96,13 @@ func TestExecutorCompletesFailoverAndRestoresTwoCopies(t *testing.T) {
 	if cluster.callCount(StepPromote) != 1 || cluster.callCount(StepAssignReplica) != 2 || cluster.callCount(StepSync) != 2 {
 		t.Fatalf("unexpected operation counts: %+v", cluster.calls)
 	}
+	callCount := len(cluster.calls)
+	if err := executor.ExecuteOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(cluster.calls) != callCount {
+		t.Fatalf("completed plan was executed again: before=%d after=%d", callCount, len(cluster.calls))
+	}
 }
 
 func TestExecutorResumesAfterLeadershipChangeWithoutDuplicates(t *testing.T) {

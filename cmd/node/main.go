@@ -57,7 +57,7 @@ func main() {
 		commandExecutor = clusterMgr.Coordinator()
 	}
 	srv := server.New(cfg.Network, commandExecutor, sink)
-	apiSrv := api.New(cfg.Observability, cfg.Node, cfg.Cluster, eng, sink, clusterMgr, snapshotMgr)
+	apiSrv := api.New(cfg.Observability, cfg.Node, cfg.Cluster, cfg.ControlPlane, eng, sink, clusterMgr, snapshotMgr)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
