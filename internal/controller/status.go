@@ -20,8 +20,12 @@ var rejectedWriteCommands = []string{"DEL", "EXPIRE", "INCR", "LPOP", "LPUSH", "
 
 func BuildStatusSnapshot(state FSMSnapshot) controlplane.StatusSnapshot {
 	view := state.LatestView
+	statusState := string(view.Status.State)
+	if statusState == "" {
+		statusState = "starting"
+	}
 	status := controlplane.StatusSnapshot{
-		State: string(view.Status.State), ControlIndex: state.ControlIndex,
+		State: statusState, ControlIndex: state.ControlIndex,
 		FailedNodes:              append([]string(nil), view.Status.FailedNodes...),
 		SuspectedNodes:           append([]string(nil), view.Status.SuspectedNodes...),
 		LatestCommittedOperation: view.Status.LatestCommittedOperation,
@@ -84,6 +88,49 @@ func BuildStatusSnapshot(state FSMSnapshot) controlplane.StatusSnapshot {
 		status.ReturningNodeDataPolicy = returningDataPolicy
 	}
 	return status
+}
+
+func BuildControllerStateSnapshot(state FSMSnapshot, nodeID, raftRole, leaderID string, term uint64, isLeader bool) controlplane.ControllerStateSnapshot {
+	view := state.LatestView
+	result := controlplane.ControllerStateSnapshot{
+		NodeID: nodeID, RaftRole: raftRole, RaftLeaderID: leaderID, RaftTerm: term, IsLeader: isLeader,
+		ControlIndex: state.ControlIndex, Recovery: BuildStatusSnapshot(state),
+		CurrentView: controlplane.ControllerView{
+			ClusterID: view.ClusterID, MetadataVersion: view.MetadataVersion,
+			ObservedAt: view.ObservedAt.UTC().Format("2006-01-02T15:04:05.000Z07:00"), Status: string(view.Status.State),
+			Nodes: make([]controlplane.ControllerNodeStatus, 0, len(view.Nodes)),
+			Slots: make([]controlplane.ControllerSlotStatus, 0, len(view.Slots)),
+		},
+	}
+	if view.ObservedAt.IsZero() {
+		result.CurrentView.ObservedAt = ""
+	}
+	ids := make([]string, 0, len(view.Nodes))
+	for id := range view.Nodes {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		node := view.Nodes[id]
+		result.CurrentView.Nodes = append(result.CurrentView.Nodes, controlplane.ControllerNodeStatus{
+			ID: id, Reachable: node.Reachable, Suspected: node.Suspected, Eligible: node.Eligible,
+			Returning: node.Returning, LeaderSlots: node.LeaderSlots, ReplicaSlots: node.ReplicaSlots,
+		})
+	}
+	slots := append([]SlotView(nil), view.Slots...)
+	sort.Slice(slots, func(i, j int) bool { return slots[i].Number < slots[j].Number })
+	for _, slot := range slots {
+		result.CurrentView.Slots = append(result.CurrentView.Slots, controlplane.ControllerSlotStatus{
+			Number: slot.Number, LeaderID: slot.LeaderID, ReplicaID: slot.ReplicaID, Term: slot.Term, ReplicaReady: slot.ReplicaReady,
+		})
+	}
+	if state.LastRebalance != nil {
+		result.LastRebalance = &controlplane.CompletedPlanStatus{
+			ID: state.LastRebalance.ID, Kind: string(state.LastRebalance.Kind), Epoch: state.LastRebalance.Epoch,
+			ControlIndex: state.LastRebalance.ControlIndex,
+		}
+	}
+	return result
 }
 
 func failedOwners(view ClusterView, slot SlotView) []string {

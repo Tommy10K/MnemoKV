@@ -1,6 +1,6 @@
 # MnemoKV Next Steps
 
-Last reviewed against the codebase: June 21, 2026.
+Last reviewed against the codebase: June 22, 2026.
 
 ## Completed Baseline
 
@@ -51,25 +51,21 @@ The end-to-end runner builds and starts an isolated standalone node and Vite ser
 both processes. The deterministic presentation dataset can be loaded with
 `scripts/load-demo-dataset.ps1` while a standalone node is running.
 
-## Experimental Automatic Cluster Recovery
+## Implemented Automatic Cluster Recovery
 
-Automatic recovery should be an optional control-plane feature built beside the current cluster,
-not inside its command, routing, or replication paths. The existing fixed-slot metadata, manual
-admin operations, and synchronous data replication should remain the stable default.
+The optional five-node automatic mode is implemented beside the data path in `internal/controller`.
+Its embedded Raft group commits observations, recovery/rebalance plans, progress, unavailable-slot
+records, and fresh-node admission. It reuses the existing promote, replica-assignment, and full-slot
+sync operations through authenticated, persistently fenced controller requests. Manual mode remains
+the default and preserves unsigned operator-driven repair.
 
-The least coupled design is a separate `cluster-controller` process or package running a small Raft
-group. Raft should replicate only control-plane decisions: metadata versions, slot terms,
-promotions, replacement-replica assignments, and repair intents. It should not become the data
-command log and should not sit on the normal RESP/HTTP request path.
+The honest guarantee is **one node failure at a time with full repair in between**. There is a
+degraded window after failure detection: affected writes are rejected until a ready replica exists,
+while unaffected slots continue. If a second destructive failure removes both copies before repair,
+the slot becomes `potential_data_loss`; it is not recreated empty and returning-node data is not
+trusted as recovery input.
 
-The controller leader would observe nodes through existing health and cluster-state APIs. After a
-failure timeout, it would propose a recovery plan to Raft. Only a majority-committed plan may be
-executed; without quorum, ownership must remain unchanged. Execution should use a narrow adapter
-over the existing promote, assign-replica, and full-slot-sync operations, making each step
-idempotent and resumable after controller restart or leadership change.
-
-Keep the experiment disabled by default and isolate it behind interfaces so current nodes need, at
-most, a committed control index or fencing token when accepting metadata updates. Manual recovery
-must continue to work unchanged when the controller is absent. Test the controller first with an
-in-memory Raft transport and simulated failures, then with separate multi-process tests covering
-leader loss, minority partitions, duplicate plans, restart during repair, and stale-node rejoin.
+Five-manager/in-memory-Raft scenarios cover promotion, repair, rebalance, partitions, leadership
+changes, duplicate execution, sequential and overlapping failures, writes during recovery, and
+fresh returning-node admission. `scripts/demo-automatic-recovery.ps1` is the real five-process
+acceptance path; use `-ReturnNode` to include the 4-to-5 scale-back.

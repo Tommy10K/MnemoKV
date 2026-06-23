@@ -144,6 +144,24 @@ func TestPlannerQuorumDuplicateAndSupersession(t *testing.T) {
 			t.Fatalf("plan was not superseded: %+v", proposer.state.ActivePlan)
 		}
 	})
+
+	t.Run("executor metadata progress does not supersede", func(t *testing.T) {
+		active, _ := PlanFailover(initial)
+		advanced := initial
+		advanced.MetadataVersion = initial.MetadataVersion + 1
+		advanced.Slots = append([]SlotView(nil), initial.Slots...)
+		advanced.Slots[0].LeaderID = "node-2"
+		advanced.Slots[0].ReplicaID = ""
+		advanced.Slots[0].ReplicaReady = false
+		advanced.Status = summarizeStatus(advanced)
+		proposer := &plannerProposer{leader: true, state: FSMSnapshot{LatestView: advanced, ActivePlan: &active}}
+		if err := NewPlanner(proposer, config.ControllerConfig{}).Evaluate(); err != nil {
+			t.Fatal(err)
+		}
+		if len(proposer.commands) != 0 {
+			t.Fatalf("ordinary executor progress superseded plan: %+v", proposer.commands)
+		}
+	})
 }
 
 func TestPlanRebalanceDetectsSkewAndCapsMoves(t *testing.T) {

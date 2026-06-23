@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import type { ClusterStateResponse, PeerStatus } from "@/api/types"
+import type { ClusterStateResponse, PeerStatus, RecoveryState, RecoveryStatus } from "@/api/types"
 import { TopologyGraph } from "@/components/cluster/TopologyGraph"
 import { useClusterState, type MetadataChange } from "@/hooks/useClusterState"
 import { useAppStore } from "@/store/appStore"
@@ -58,6 +58,10 @@ function ClusterView({
   const localLeaderSlots = slots.filter((slot) => slot.localRole === "leader").length
   const localReplicaSlots = slots.filter((slot) => slot.localRole === "replica").length
   const unreadyReplicas = slots.filter((slot) => !slot.replicaReady).length
+  const recovery = state.recovery
+  const oneCopy = recovery?.oneCopySlots ?? []
+  const unavailable = recovery?.unavailableSlots ?? []
+  const affectedBySlot = new Map([...oneCopy, ...unavailable].map((slot) => [slot.slot, slot]))
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,15 +69,20 @@ function ClusterView({
         <h1 className="text-2xl font-semibold text-white">Cluster</h1>
         <p className="text-sm text-[#9ca3af]">
           Authoritative slot metadata observed by <span className="font-mono text-white">{state.nodeId}</span>{" "}
-          at <span className="font-mono">{baseUrl}</span>. Failover and replica repair are manual.
+          at <span className="font-mono">{baseUrl}</span>. {state.failoverMode === "automatic"
+            ? "The embedded controller manages failure recovery and rebalancing."
+            : "Failover and replica repair are manual."}
         </p>
       </header>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {recovery && <RecoveryBanner recovery={recovery} />}
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Metadata version">{state.metadataVersion ?? 0}</StatCard>
         <StatCard label="Local slots">{localLeaderSlots} leader / {localReplicaSlots} replica</StatCard>
         <StatCard label="Replica readiness">{slots.length - unreadyReplicas}/{slots.length}</StatCard>
         <StatCard label="Observed healthy">{counts.healthy ?? 0}/{peers.length}</StatCard>
+        <StatCard label="Recovery copies">{oneCopy.length} one-copy / {unavailable.length} unavailable</StatCard>
       </div>
 
       <TopologyGraph peers={peers} selfId={state.nodeId} />
@@ -88,14 +97,19 @@ function ClusterView({
                 <tr><th className="pb-2">Slot</th><th className="pb-2">Leader</th><th className="pb-2">Replica</th><th className="pb-2">Term / seq</th></tr>
               </thead>
               <tbody className="font-mono text-[#e6edf3]">
-                {slots.map((slot) => (
-                  <tr key={slot.number} className="border-t border-[#1f2937]">
-                    <td className="py-1.5">{slot.number}</td>
-                    <td>{slot.leaderId}</td>
-                    <td className={slot.replicaReady ? "" : "text-amber-300"}>{slot.replicaId || "unassigned"}</td>
-                    <td>{slot.term} / {slot.lastSequence}</td>
-                  </tr>
-                ))}
+                {slots.map((slot) => {
+                  const affected = affectedBySlot.get(slot.number)
+                  return (
+                    <tr key={slot.number} className={`border-t border-[#1f2937] ${affected ? "bg-amber-500/5" : ""}`}>
+                      <td className="py-1.5">{slot.number}</td>
+                      <td>{slot.leaderId}</td>
+                      <td className={affected || !slot.replicaReady ? "text-amber-300" : ""}>
+                        {slot.replicaId || "unassigned"}{affected ? ` · ${affected.classification}` : ""}
+                      </td>
+                      <td>{slot.term} / {slot.lastSequence}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -122,6 +136,42 @@ function ClusterView({
       </div>
     </div>
   )
+}
+
+function RecoveryBanner({ recovery }: { recovery: RecoveryStatus }) {
+  const tone = recoveryTone(recovery.state)
+  const plan = recovery.activePlan
+  return (
+    <section role={recovery.state === "potential_data_loss" ? "alert" : "status"} aria-live="polite" className={`rounded-lg border p-4 ${tone}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-xs uppercase tracking-wide opacity-75">Automatic recovery</div>
+          <div className="mt-1 text-lg font-semibold">{recovery.state.replaceAll("_", " ")}</div>
+        </div>
+        <div className="font-mono text-xs opacity-75">control index {recovery.controlIndex}</div>
+      </div>
+      {plan && (
+        <div className="mt-3">
+          <div className="flex justify-between text-sm">
+            <span>{plan.kind}: {plan.reason}</span>
+            <span>{plan.completedSteps}/{plan.totalSteps} steps</span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/30" aria-label={`${plan.completedSteps} of ${plan.totalSteps} recovery steps complete`}>
+            <div className="h-full bg-current opacity-70" style={{ width: `${plan.totalSteps === 0 ? 100 : Math.round((plan.completedSteps / plan.totalSteps) * 100)}%` }} />
+          </div>
+        </div>
+      )}
+      {recovery.warning && <p className="mt-3 text-sm font-medium">{recovery.warning}</p>}
+      {(recovery.failedNodes?.length ?? 0) > 0 && <p className="mt-2 text-xs">Failed nodes: {recovery.failedNodes?.join(", ")}</p>}
+      {recovery.returningNodeDataPolicy && <p className="mt-2 text-xs opacity-80">{recovery.returningNodeDataPolicy}</p>}
+    </section>
+  )
+}
+
+function recoveryTone(state: RecoveryState): string {
+  if (state === "potential_data_loss" || state === "unavailable") return "border-red-500/50 bg-red-500/10 text-red-100"
+  if (state === "healthy") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-100"
+  return "border-amber-500/50 bg-amber-500/10 text-amber-100"
 }
 
 function StatCard({ label, children }: { label: string; children: React.ReactNode }) {

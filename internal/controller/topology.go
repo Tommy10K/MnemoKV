@@ -68,6 +68,7 @@ func summarizeStatus(view ClusterView) StatusSummary {
 
 func summarizeStatusWithThreshold(view ClusterView, skewThreshold int) StatusSummary {
 	summary := StatusSummary{State: StatusHealthy}
+	hasLeaderless := false
 	for id, node := range view.Nodes {
 		switch {
 		case node.Suspected:
@@ -80,7 +81,10 @@ func summarizeStatusWithThreshold(view ClusterView, skewThreshold int) StatusSum
 	sort.Strings(summary.FailedNodes)
 	for _, class := range ClassifySlots(view) {
 		switch class {
-		case SlotLeaderless, SlotReplicaLost:
+		case SlotLeaderless:
+			hasLeaderless = true
+			summary.DegradedSlots++
+		case SlotReplicaLost:
 			summary.DegradedSlots++
 		case SlotNoSurvivingCopy:
 			summary.UnavailableSlots++
@@ -89,6 +93,8 @@ func summarizeStatusWithThreshold(view ClusterView, skewThreshold int) StatusSum
 	switch {
 	case summary.UnavailableSlots > 0:
 		summary.State = StatusPotentialDataLoss
+	case hasLeaderless:
+		summary.State = StatusUnavailable
 	case summary.DegradedSlots > 0:
 		summary.State = StatusDegraded
 	case len(summary.SuspectedNodes) > 0:

@@ -159,6 +159,43 @@ func TestFSMSnapshotRestoreRoundTrip(t *testing.T) {
 	}
 }
 
+func TestFSMRecordsLastCompletedRebalanceAtCommittedIndex(t *testing.T) {
+	fsm := NewFSM()
+	applyFSMCommand(t, fsm, 1, CommandObserveView, ClusterView{MetadataVersion: 5})
+	plan := RecoveryPlan{ID: "rebalance-5", Kind: PlanKindRebalance, Epoch: 5, Done: map[int]bool{}}
+	applyFSMCommand(t, fsm, 2, CommandProposeRebalance, plan)
+	applyFSMCommand(t, fsm, 3, CommandPlanComplete, PlanIDPayload{PlanID: plan.ID})
+	got := fsm.State().LastRebalance
+	if got == nil || got.ID != plan.ID || got.Epoch != 5 || got.ControlIndex != 3 {
+		t.Fatalf("last rebalance = %+v", got)
+	}
+}
+
+func TestFSMObservationPreservesActivePlanStatus(t *testing.T) {
+	fsm := NewFSM()
+	view := ClusterView{Status: StatusSummary{State: StatusUnavailable}}
+	applyFSMCommand(t, fsm, 1, CommandObserveView, view)
+	plan := RecoveryPlan{ID: "recovery", Kind: PlanKindRecovery, Steps: []PlanStep{{Kind: StepPromote, Slot: 1}}, Done: map[int]bool{}}
+	applyFSMCommand(t, fsm, 2, CommandProposePlan, plan)
+	view.MetadataVersion = 2
+	applyFSMCommand(t, fsm, 3, CommandObserveView, view)
+	if got := fsm.State().LatestView.Status.State; got != StatusPromoting {
+		t.Fatalf("active plan state after observation = %s", got)
+	}
+}
+
+func applyFSMCommand(t *testing.T, fsm *FSM, index uint64, commandType CommandType, payload any) {
+	t.Helper()
+	command, err := NewCommand(commandType, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(command)
+	if result := fsm.Apply(&raft.Log{Index: index, Data: raw}); result != nil {
+		t.Fatal(result)
+	}
+}
+
 func newInmemRaftCluster(t *testing.T, size int) ([]*RaftNode, []*raft.InmemTransport) {
 	t.Helper()
 	addresses := make([]raft.ServerAddress, size)

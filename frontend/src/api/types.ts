@@ -2,6 +2,7 @@ export type HealthResponse = {
   status: string
   nodeId: string
   mode: string
+  dataState?: string
 }
 
 export type EngineStateResponse = {
@@ -34,6 +35,71 @@ export type ClusterStateResponse = {
   peers: string[]
   membership?: PeerStatus[]
   slots?: SlotStatus[]
+  dataState?: string
+  recovery?: RecoveryStatus
+}
+
+export type RecoveryState =
+  | "healthy"
+  | "failure_suspected"
+  | "degraded"
+  | "promoting"
+  | "repairing"
+  | "rebalancing"
+  | "unavailable"
+  | "potential_data_loss"
+  | "starting"
+
+export type RecoveryPlanStatus = {
+  id: string
+  kind: string
+  reason: string
+  completedSteps: number
+  totalSteps: number
+}
+
+export type RecoverySlotStatus = {
+  slot: number
+  classification: string
+  formerLeaderId: string
+  formerReplicaId?: string
+  failures?: string[]
+  readsAvailable: boolean
+  writesAvailable: boolean
+  rejectedCommands?: string[]
+  message: string
+}
+
+export type RecoveryStatus = {
+  state: RecoveryState
+  controlIndex: number
+  failedNodes?: string[]
+  suspectedNodes?: string[]
+  oneCopySlots?: RecoverySlotStatus[]
+  unavailableSlots?: RecoverySlotStatus[]
+  activePlan?: RecoveryPlanStatus
+  latestCommittedOperation?: string
+  warning?: string
+  returningNodeDataPolicy?: string
+}
+
+export type ControllerStateResponse = {
+  nodeId: string
+  raftRole: string
+  raftLeaderId?: string
+  raftTerm: number
+  isLeader: boolean
+  controlIndex: number
+  currentView: {
+    clusterId: string
+    metadataVersion: number
+    observedAt?: string
+    status: string
+    nodes: Array<{ id: string; reachable: boolean; suspected: boolean; eligible: boolean; returning: boolean; leaderSlots: number; replicaSlots: number }>
+    slots: Array<{ number: number; leaderId: string; replicaId?: string; term: number; replicaReady: boolean }>
+  }
+  recovery: RecoveryStatus
+  lastRebalance?: { id: string; kind: string; epoch: number; controlIndex: number }
 }
 
 export type SlotStatus = {
@@ -55,6 +121,7 @@ export type NodeEvent = {
   policy: string
   rejectedWrites?: number
   counters?: Record<string, number>
+  recovery?: RecoveryStatus
 }
 
 export type CommandResult =

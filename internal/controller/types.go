@@ -149,6 +149,13 @@ type UnavailableSlot struct {
 	Failures  []string `json:"failures"`
 }
 
+type CompletedPlan struct {
+	ID           string   `json:"id"`
+	Kind         PlanKind `json:"kind"`
+	Epoch        uint64   `json:"epoch"`
+	ControlIndex uint64   `json:"controlIndex"`
+}
+
 type FSMSnapshot struct {
 	LatestView          ClusterView                `json:"latestView"`
 	ActivePlan          *RecoveryPlan              `json:"activePlan,omitempty"`
@@ -156,4 +163,5 @@ type FSMSnapshot struct {
 	Unavailable         map[uint32]UnavailableSlot `json:"unavailable"`
 	ReturningNodes      map[string]bool            `json:"returningNodes"`
 	LastCompletedPlanID string                     `json:"lastCompletedPlanId,omitempty"`
+	LastRebalance       *CompletedPlan             `json:"lastRebalance,omitempty"`
 }

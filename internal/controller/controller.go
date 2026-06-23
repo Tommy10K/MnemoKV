@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -97,6 +99,26 @@ func (c *Controller) StatusSnapshot() controlplane.StatusSnapshot {
 	return BuildStatusSnapshot(raftNode.State())
 }
 
+func (c *Controller) StateSnapshot() controlplane.ControllerStateSnapshot {
+	c.mu.Lock()
+	raftNode := c.raft
+	c.mu.Unlock()
+	if raftNode == nil {
+		return controlplane.ControllerStateSnapshot{NodeID: c.nodeID, RaftRole: "starting", Recovery: controlplane.StatusSnapshot{State: "starting"}}
+	}
+	role := strings.ToLower(raftNode.Raft().State().String())
+	leaderAddress := string(raftNode.Raft().Leader())
+	leaderID := leaderAddress
+	for _, peer := range c.cfg.Peers {
+		if peer.ControlAddress == leaderAddress {
+			leaderID = peer.ID
+			break
+		}
+	}
+	term, _ := strconv.ParseUint(raftNode.Raft().Stats()["term"], 10, 64)
+	return BuildControllerStateSnapshot(raftNode.State(), c.nodeID, role, leaderID, term, raftNode.IsLeader())
+}
+
 func (c *Controller) monitorStatus(ctx context.Context, raftNode *RaftNode) {
 	interval := time.Duration(c.cfg.Controller.ObserveIntervalMs) * time.Millisecond
 	if interval <= 0 {
@@ -114,11 +136,7 @@ func (c *Controller) monitorStatus(ctx context.Context, raftNode *RaftNode) {
 				continue
 			}
 			status := BuildStatusSnapshot(raftNode.State())
-			if c.metrics != nil {
-				c.metrics.Gauge("controller.degraded_slots", float64(len(status.OneCopySlots)))
-				c.metrics.Gauge("controller.unavailable_slots", float64(len(status.UnavailableSlots)))
-				c.metrics.Gauge("controller.failed_nodes", float64(len(status.FailedNodes)))
-			}
+			publishStatusMetrics(c.metrics, status)
 			raw, _ := json.Marshal(status)
 			fingerprint := string(raw)
 			if fingerprint == previous {
@@ -138,6 +156,22 @@ func (c *Controller) monitorStatus(ctx context.Context, raftNode *RaftNode) {
 				logging.Infof("controller: status=%s failed=%v degraded_slots=%d", status.State, status.FailedNodes, len(status.OneCopySlots))
 			}
 		}
+	}
+}
+
+func publishStatusMetrics(sink *metrics.InMemory, status controlplane.StatusSnapshot) {
+	if sink == nil {
+		return
+	}
+	sink.Gauge("controller.degraded_slots", float64(len(status.OneCopySlots)))
+	sink.Gauge("controller.unavailable_slots", float64(len(status.UnavailableSlots)))
+	sink.Gauge("controller.failed_nodes", float64(len(status.FailedNodes)))
+	for _, state := range []string{"healthy", "failure_suspected", "degraded", "promoting", "repairing", "rebalancing", "unavailable", "potential_data_loss"} {
+		value := 0.0
+		if status.State == state {
+			value = 1
+		}
+		sink.Gauge("controller.state."+state, value)
 	}
 }
 

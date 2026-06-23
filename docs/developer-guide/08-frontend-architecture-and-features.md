@@ -87,8 +87,10 @@ eviction, sharding, replication, membership, failover, and benchmarks. Interacti
 skip lists, stripes, and eviction.
 
 Learning text must distinguish general distributed-systems theory from MnemoKV's actual
-implementation. For example, the cluster uses local heartbeat observations and manual failover; it
-does not claim gossip convergence or automatic election.
+implementation. Manual mode uses local heartbeat observations without election. The separate
+five-node automatic mode uses a Raft-backed controller for recovery decisions, while membership
+hints still never change ownership by themselves. The Cluster page renders the backend's recovery
+state, one-copy/unavailable slots, active-plan progress, and degraded-window warning.
 
 ## Accessibility And Responsive Design
 

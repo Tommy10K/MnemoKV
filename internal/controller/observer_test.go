@@ -55,7 +55,7 @@ func TestObserverBuildsViewAndTracksFailureRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	classes := ClassifySlots(view)
-	if view.Status.State != StatusDegraded || classes[0] != SlotLeaderless || classes[1] != SlotReplicaLost || classes[2] != SlotUnaffected {
+	if view.Status.State != StatusUnavailable || classes[0] != SlotLeaderless || classes[1] != SlotReplicaLost || classes[2] != SlotUnaffected {
 		t.Fatalf("unexpected confirmed failure view: status=%+v classes=%+v", view.Status, classes)
 	}
 	sets = DeriveTopology(peers, view)
@@ -115,7 +115,7 @@ func TestObserverConfirmsFailureAfterTimeout(t *testing.T) {
 	}
 	now = now.Add(51 * time.Millisecond)
 	view, err = observer.PollOnce(context.Background())
-	if err != nil || view.Status.State != StatusDegraded {
+	if err != nil || view.Status.State != StatusUnavailable {
 		t.Fatalf("failure timeout should confirm failure: status=%+v err=%v", view.Status, err)
 	}
 }

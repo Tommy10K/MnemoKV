@@ -80,6 +80,35 @@ destructive failure before repair completes can remove the last reachable copy o
 is reported as `potential_data_loss` and is never recreated empty. Unaffected slots continue serving,
 and a returning node's old application data is not trusted or merged in v1.
 
+Run the complete five-process demonstration from the repository root:
+
+```powershell
+./scripts/demo-automatic-recovery.ps1
+```
+
+The script builds the node binary, starts all five automatic presets with isolated temporary data,
+waits for a Raft leader and a healthy topology, kills `node-1`, and reports controller transitions
+through promotion, replica repair, and balanced four-node convergence. It verifies every slot has
+two distinct ready healthy owners and that the failed node owns none.
+
+To restart `node-1` behind the fresh-data admission gate and demonstrate automatic 4-to-5
+scale-back:
+
+```powershell
+./scripts/demo-automatic-recovery.ps1 -ReturnNode
+```
+
+Use `-KeepRunning` to inspect the APIs or frontend before cleanup. Useful endpoints are:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:7382/cluster/state
+Invoke-RestMethod http://127.0.0.1:7382/controller/state
+```
+
+`/controller/state` includes the Raft leader and term, committed view, active-plan step counts,
+unavailable slots, and last rebalance. The Cluster frontend page displays the same degraded window
+and warning from `/cluster/state`.
+
 ## Benchmark Import
 
 The Benchmarks page accepts raw `go test -bench -benchmem` output or JSON. Use **Load built-in

@@ -13,6 +13,12 @@ type fixedControllerStatus struct{ status controlplane.StatusSnapshot }
 
 func (f fixedControllerStatus) StatusSnapshot() controlplane.StatusSnapshot { return f.status }
 
+type fixedControllerState struct {
+	state controlplane.ControllerStateSnapshot
+}
+
+func (f fixedControllerState) StateSnapshot() controlplane.ControllerStateSnapshot { return f.state }
+
 func TestClusterAndEventPayloadsExposeRecoveryStatus(t *testing.T) {
 	server := newTestServer()
 	status := controlplane.StatusSnapshot{
@@ -58,5 +64,39 @@ func TestMetricsSummaryIncludesControllerGauges(t *testing.T) {
 	}
 	if summary.Gauges["controller.unavailable_slots"] != 2 {
 		t.Fatalf("controller gauge missing: %+v", summary.Gauges)
+	}
+}
+
+func TestControllerStateEndpointExposesRaftViewAndProgress(t *testing.T) {
+	server := newClusterAdminTestServer(t, "automatic", t.TempDir())
+	state := controlplane.ControllerStateSnapshot{
+		NodeID: "node-1", RaftRole: "leader", RaftLeaderID: "node-1", RaftTerm: 4, IsLeader: true, ControlIndex: 22,
+		CurrentView:   controlplane.ControllerView{ClusterID: "api-fencing", MetadataVersion: 9, Status: "repairing"},
+		Recovery:      controlplane.StatusSnapshot{State: "repairing", ActivePlan: &controlplane.PlanStatus{ID: "plan-1", CompletedSteps: 2, TotalSteps: 4}},
+		LastRebalance: &controlplane.CompletedPlanStatus{ID: "rebalance-1", Kind: "rebalance", Epoch: 8, ControlIndex: 18},
+	}
+	server.SetControllerStateProvider(fixedControllerState{state: state})
+	request := httptest.NewRequest(http.MethodGet, "/controller/state", nil)
+	response := httptest.NewRecorder()
+	server.handleControllerState(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("controller state = %d %s", response.Code, response.Body.String())
+	}
+	var got controlplane.ControllerStateSnapshot
+	if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.IsLeader || got.RaftTerm != 4 || got.Recovery.ActivePlan == nil || got.LastRebalance == nil {
+		t.Fatalf("controller state is incomplete: %+v", got)
+	}
+}
+
+func TestControllerStateEndpointIsAbsentOutsideAutomaticMode(t *testing.T) {
+	server := newClusterAdminTestServer(t, "manual", "")
+	server.SetControllerStateProvider(fixedControllerState{})
+	response := httptest.NewRecorder()
+	server.handleControllerState(response, httptest.NewRequest(http.MethodGet, "/controller/state", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("manual controller endpoint = %d", response.Code)
 	}
 }

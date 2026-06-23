@@ -5,6 +5,7 @@ import type {
   EngineStateResponse,
   HealthResponse,
   MetricsSummary,
+  ControllerStateResponse,
 } from "./types"
 import {
   parseClusterStateResponse,
@@ -13,6 +14,7 @@ import {
   parseEvictionPolicyResponse,
   parseHealthResponse,
   parseMetricsSummary,
+  parseControllerStateResponse,
 } from "./validate"
 
 function base(): string {
@@ -45,6 +47,10 @@ export function getMetricsSummary(signal?: AbortSignal) {
 
 export function getClusterState(signal?: AbortSignal) {
   return getJSON<ClusterStateResponse>("/cluster/state", parseClusterStateResponse, signal)
+}
+
+export function getControllerState(signal?: AbortSignal) {
+  return getJSON<ControllerStateResponse>("/controller/state", parseControllerStateResponse, signal)
 }
 
 export async function runCommand(args: string[]): Promise<CommandResult> {

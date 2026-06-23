@@ -39,3 +39,49 @@ type PlanStatus struct {
 	CompletedSteps int    `json:"completedSteps"`
 	TotalSteps     int    `json:"totalSteps"`
 }
+
+type ControllerStateSnapshot struct {
+	NodeID        string               `json:"nodeId"`
+	RaftRole      string               `json:"raftRole"`
+	RaftLeaderID  string               `json:"raftLeaderId,omitempty"`
+	RaftTerm      uint64               `json:"raftTerm"`
+	IsLeader      bool                 `json:"isLeader"`
+	ControlIndex  uint64               `json:"controlIndex"`
+	CurrentView   ControllerView       `json:"currentView"`
+	Recovery      StatusSnapshot       `json:"recovery"`
+	LastRebalance *CompletedPlanStatus `json:"lastRebalance,omitempty"`
+}
+
+type ControllerView struct {
+	ClusterID       string                 `json:"clusterId"`
+	MetadataVersion uint64                 `json:"metadataVersion"`
+	ObservedAt      string                 `json:"observedAt,omitempty"`
+	Status          string                 `json:"status"`
+	Nodes           []ControllerNodeStatus `json:"nodes"`
+	Slots           []ControllerSlotStatus `json:"slots"`
+}
+
+type ControllerNodeStatus struct {
+	ID           string `json:"id"`
+	Reachable    bool   `json:"reachable"`
+	Suspected    bool   `json:"suspected"`
+	Eligible     bool   `json:"eligible"`
+	Returning    bool   `json:"returning"`
+	LeaderSlots  int    `json:"leaderSlots"`
+	ReplicaSlots int    `json:"replicaSlots"`
+}
+
+type ControllerSlotStatus struct {
+	Number       uint32 `json:"number"`
+	LeaderID     string `json:"leaderId"`
+	ReplicaID    string `json:"replicaId,omitempty"`
+	Term         uint64 `json:"term"`
+	ReplicaReady bool   `json:"replicaReady"`
+}
+
+type CompletedPlanStatus struct {
+	ID           string `json:"id"`
+	Kind         string `json:"kind"`
+	Epoch        uint64 `json:"epoch"`
+	ControlIndex uint64 `json:"controlIndex"`
+}

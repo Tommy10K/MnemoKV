@@ -4,8 +4,11 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mnemokv/mnemokv/internal/config"
+	"github.com/mnemokv/mnemokv/internal/controlplane"
+	"github.com/mnemokv/mnemokv/internal/metrics"
 	"github.com/mnemokv/mnemokv/internal/resp"
 )
 
@@ -121,5 +124,32 @@ func TestBuildStatusSnapshotReportsOneCopySemanticsAndRanges(t *testing.T) {
 	}
 	if !status.OneCopySlots[1].ReadsAvailable || status.OneCopySlots[1].WritesAvailable {
 		t.Fatalf("replica-lost slot availability is dishonest: %+v", status.OneCopySlots[1])
+	}
+}
+
+func TestBuildControllerStateSnapshotIncludesDeterministicViewAndLastRebalance(t *testing.T) {
+	view := ClusterView{ClusterID: "cluster", MetadataVersion: 7, ObservedAt: time.Unix(10, 0).UTC(), Nodes: map[string]NodeView{
+		"node-2": {ID: "node-2", Reachable: true, Eligible: true},
+		"node-1": {ID: "node-1", Reachable: false},
+	}, Slots: []SlotView{{Number: 0, LeaderID: "node-1", ReplicaID: "node-2", Term: 2, ReplicaReady: true}}}
+	view.Status = summarizeStatus(view)
+	state := FSMSnapshot{LatestView: view, ControlIndex: 12, LastRebalance: &CompletedPlan{ID: "r1", Kind: PlanKindRebalance, Epoch: 6, ControlIndex: 11}}
+	got := BuildControllerStateSnapshot(state, "node-2", "leader", "node-2", 3, true)
+	if got.CurrentView.Nodes[0].ID != "node-1" || got.CurrentView.Slots[0].Number != 0 || got.LastRebalance == nil || got.LastRebalance.ControlIndex != 11 {
+		t.Fatalf("controller snapshot is incomplete or nondeterministic: %+v", got)
+	}
+}
+
+func TestControllerStateMetricsUseThePublicStatusNames(t *testing.T) {
+	sink := metrics.NewInMemory(8)
+	publishStatusMetrics(sink, controlplane.StatusSnapshot{State: "repairing"})
+	for _, state := range []string{"healthy", "failure_suspected", "degraded", "promoting", "repairing", "rebalancing", "unavailable", "potential_data_loss"} {
+		want := 0.0
+		if state == "repairing" {
+			want = 1
+		}
+		if got := sink.GaugesSnapshot()["controller.state."+state]; got != want {
+			t.Fatalf("state gauge %s = %v, want %v", state, got, want)
+		}
 	}
 }

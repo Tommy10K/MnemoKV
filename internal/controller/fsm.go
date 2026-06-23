@@ -34,8 +34,14 @@ func (f *FSM) Apply(log *raft.Log) any {
 		return err
 	}
 	f.state.ControlIndex = log.Index
+	if command.Type == CommandPlanComplete && f.state.LastRebalance != nil && f.state.LastRebalance.ControlIndex == 0 {
+		f.state.LastRebalance.ControlIndex = log.Index
+	}
 	if command.Type == CommandObserveView {
 		f.state.LatestView.Status.LatestCommittedOperation = latestOperation
+		if f.state.ActivePlan != nil {
+			updatePlanStatus(&f.state)
+		}
 	} else {
 		f.state.LatestView.Status.LatestCommittedOperation = string(command.Type)
 	}
@@ -80,6 +86,9 @@ func (f *FSM) applyCommand(command Command) error {
 			return fmt.Errorf("active plan %q not found", payload.PlanID)
 		}
 		f.state.LastCompletedPlanID = payload.PlanID
+		if f.state.ActivePlan.Kind == PlanKindRebalance {
+			f.state.LastRebalance = &CompletedPlan{ID: f.state.ActivePlan.ID, Kind: f.state.ActivePlan.Kind, Epoch: f.state.ActivePlan.Epoch}
+		}
 		f.state.ActivePlan = nil
 		return nil
 	case CommandSupersedePlan:

@@ -314,8 +314,11 @@ func (p *Planner) Evaluate() error {
 	if state.ActivePlan.ID == plan.ID {
 		return nil
 	}
-	viewAdvanced := state.LatestView.MetadataVersion > state.ActivePlan.Epoch
-	if !viewAdvanced && !hasNewConfirmedFailure(state.ActivePlan.DeadNodes, plan.DeadNodes) {
+	// Metadata normally advances after every successful executor step. Those
+	// observations are progress, not invalidation: the executor checks each
+	// remaining step's postcondition against converged live metadata. A newly
+	// confirmed failure is the condition that invalidates its copy assumptions.
+	if !hasNewConfirmedFailure(state.ActivePlan.DeadNodes, plan.DeadNodes) {
 		return nil
 	}
 	command, err := NewCommand(CommandSupersedePlan, SupersedePlanPayload{OldPlanID: state.ActivePlan.ID, NewPlan: plan})

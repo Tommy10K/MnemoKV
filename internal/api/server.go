@@ -29,6 +29,10 @@ type ControllerStatusProvider interface {
 	StatusSnapshot() controlplane.StatusSnapshot
 }
 
+type ControllerStateProvider interface {
+	StateSnapshot() controlplane.ControllerStateSnapshot
+}
+
 type Server struct {
 	cfg              config.ObservabilityConfig
 	node             config.NodeConfig
@@ -42,12 +46,20 @@ type Server struct {
 	fence            *controlplane.FenceStore
 	fenceErr         error
 	controllerStatus ControllerStatusProvider
+	controllerState  ControllerStateProvider
 
 	httpSrv *http.Server
 }
 
 func (s *Server) SetControllerStatusProvider(provider ControllerStatusProvider) {
 	s.controllerStatus = provider
+	if stateProvider, ok := provider.(ControllerStateProvider); ok {
+		s.controllerState = stateProvider
+	}
+}
+
+func (s *Server) SetControllerStateProvider(provider ControllerStateProvider) {
+	s.controllerState = provider
 }
 
 func New(cfg config.ObservabilityConfig, node config.NodeConfig, clusterCfg config.ClusterConfig, controlPlaneCfg config.ControlPlaneConfig, eng *engine.Engine, sink *metrics.InMemory, cluMgr *cluster.Manager, snapshots Snapshotter) *Server {
