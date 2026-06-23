@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/mnemokv/mnemokv/internal/config"
@@ -28,12 +29,14 @@ type Manager struct {
 	engine      *engine.Engine
 	coordinator *Coordinator
 	applyMu     sync.Mutex
+	admitted    atomic.Bool
 }
 
 func NewManager(cfg config.ClusterConfig) *Manager { return NewManagerWithNode(cfg, "") }
 
 func NewManagerWithNode(cfg config.ClusterConfig, nodeID string) *Manager {
 	m := &Manager{cfg: cfg, nodeID: nodeID}
+	m.admitted.Store(true)
 	if !cfg.Enabled {
 		return m
 	}
@@ -55,6 +58,26 @@ func NewManagerWithNode(cfg config.ClusterConfig, nodeID string) *Manager {
 	}
 	return m
 }
+
+// RequireAdmission fences the public data path while a returning automatic
+// node is cleared and validated. Internal metadata and replication commands
+// remain available so the controller can prepare the node.
+func (m *Manager) RequireAdmission() { m.admitted.Store(false) }
+
+func (m *Manager) AdmitData() { m.admitted.Store(true) }
+
+func (m *Manager) DataAdmitted() bool { return m == nil || m.admitted.Load() }
+
+func (m *Manager) DataState() string {
+	if m.DataAdmitted() {
+		return "active"
+	}
+	return "recovering"
+}
+
+// RefreshMetadata installs the newest metadata available from configured
+// peers without changing the node's configured identity.
+func (m *Manager) RefreshMetadata(ctx context.Context) { m.syncMetadata(ctx) }
 
 func (m *Manager) Enabled() bool                { return m != nil && m.cfg.Enabled }
 func (m *Manager) Router() *Router              { return m.router }

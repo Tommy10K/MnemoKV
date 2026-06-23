@@ -23,6 +23,16 @@ cluster:
   slotCount: 1024
   routingMode: proxy
   failoverMode: manual
+  # Automatic-mode settings (unused in manual mode):
+  # controller:
+  #   controlPort: 7482
+  #   raftDir: ./data/node-2/controller
+  #   bootstrapNodeId: node-1
+  #   observeIntervalMs: 1000
+  #   failureTimeoutMs: 10000
+  #   consecutiveFailures: 3
+  #   rebalanceSkewThreshold: 1
+  #   migrationRateLimit: 10
   peers:
     - id: node-1
       address: 127.0.0.1:6381
@@ -33,6 +43,9 @@ cluster:
     - id: node-3
       address: 127.0.0.1:6383
       apiAddress: 127.0.0.1:7383
+
+# controlPlane:
+#   requestSigningSecret: replace-with-a-shared-secret
 
 persistence:
   enabled: true

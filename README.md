@@ -14,7 +14,8 @@ standalone RESP2 server and a small fixed-slot cluster with a React dashboard an
 - Health, engine, metrics, cluster-state, command, event-stream, eviction-policy, and snapshot APIs.
 - JSON and binary snapshots with checksums, atomic replacement, retention, and startup restore.
 - Fixed-slot proxy routing through any node, with same-slot multi-key enforcement.
-- Ordered synchronous replication to one replica and explicit manual failover/repair.
+- Ordered synchronous replication to one replica, manual repair by default, and opt-in five-node
+  Raft-controlled automatic recovery/rebalancing.
 - Synthetic string, list, sorted-set, and mixed workload profiles.
 - Runtime-validated React UI with accessible charts, responsive layouts, and Edge end-to-end tests.
 
@@ -153,6 +154,18 @@ Manual operations use the API of a node with the current metadata. For example:
 Promotion, replica assignment, and full-slot synchronization are separate by design. Writes remain
 unavailable for an affected slot until its replacement replica is synchronized.
 
+The five automatic presets use RESP ports `6381`–`6385`, API ports `7381`–`7385`, and control ports
+`7481`–`7485`. Run the process-level recovery demo with:
+
+```powershell
+./scripts/demo-automatic-recovery.ps1
+./scripts/demo-automatic-recovery.ps1 -ReturnNode
+```
+
+Automatic mode requires three of five controller voters for ownership changes and guarantees one
+failure at a time with repair in between. A second destructive failure during the degraded window
+can produce `potential_data_loss`; MnemoKV reports the slot and never recreates it empty.
+
 ## Build command-line tools
 
 PowerShell:
@@ -174,6 +187,7 @@ GNU Make environments can use `make build`, `make test`, `make race`, and `make 
 | `GET` | `/engine/state` | Memory and eviction state |
 | `GET` | `/metrics/summary` | Command and eviction counters |
 | `GET` | `/cluster/state` | Authoritative metadata, slot roles, terms, sequences, and membership hints |
+| `GET` | `/controller/state` | Automatic controller leader/term, committed view, recovery progress, and last rebalance |
 | `GET` | `/events` | Server-sent observability snapshots |
 | `POST` | `/commands` | Execute one command from JSON arguments |
 | `POST` | `/engine/eviction-policy` | Change the active eviction policy |
@@ -213,6 +227,8 @@ docs/developer-guide/ ordered implementation onboarding and demo walkthrough
 frontend/             React/Vite learning and observability UI
 internal/api/         HTTP API and SSE
 internal/cluster/     fixed-slot metadata, routing, replication, membership, failover, and repair
+internal/controller/  optional embedded Raft recovery and rebalance control plane
+internal/controlplane/ shared controller authentication, fencing, and status contracts
 internal/config/      YAML model, defaults, and validation
 internal/engine/      striped store, commands, memory accounting, and eviction
 internal/persistence/ snapshot lifecycle, retention, and restore

@@ -8,10 +8,15 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
+	dataState := "active"
+	if s.cluMgr != nil {
+		dataState = s.cluMgr.DataState()
+	}
 	writeJSON(w, http.StatusOK, HealthResponse{
-		Status: "ok",
-		NodeID: s.node.ID,
-		Mode:   s.node.Mode,
+		Status:    "ok",
+		NodeID:    s.node.ID,
+		Mode:      s.node.Mode,
+		DataState: dataState,
 	})
 }
 
@@ -40,10 +45,10 @@ func (s *Server) handleMetricsSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.metrics == nil {
-		writeJSON(w, http.StatusOK, MetricsSummary{Counters: map[string]uint64{}})
+		writeJSON(w, http.StatusOK, MetricsSummary{Counters: map[string]uint64{}, Gauges: map[string]float64{}})
 		return
 	}
-	writeJSON(w, http.StatusOK, MetricsSummary{Counters: s.metrics.Snapshot()})
+	writeJSON(w, http.StatusOK, MetricsSummary{Counters: s.metrics.Snapshot(), Gauges: s.metrics.GaugesSnapshot()})
 }
 
 func (s *Server) handleClusterState(w http.ResponseWriter, r *http.Request) {
@@ -57,11 +62,13 @@ func (s *Server) handleClusterState(w http.ResponseWriter, r *http.Request) {
 		SlotCount:    s.cluster.SlotCount,
 		RoutingMode:  s.cluster.RoutingMode,
 		FailoverMode: s.cluster.FailoverMode,
+		DataState:    "active",
 	}
 	for _, p := range s.cluster.Peers {
 		resp.Peers = append(resp.Peers, p.ID)
 	}
 	if s.cluMgr != nil {
+		resp.DataState = s.cluMgr.DataState()
 		for _, m := range s.cluMgr.Membership() {
 			resp.Membership = append(resp.Membership, PeerStatus{
 				ID:      m.ID,
@@ -78,5 +85,20 @@ func (s *Server) handleClusterState(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if s.controllerStatus != nil {
+		status := s.controllerStatus.StatusSnapshot()
+		resp.Recovery = &status
+	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (s *Server) handleControllerState(w http.ResponseWriter, r *http.Request) {
+	if !requireMethod(w, r, http.MethodGet) {
+		return
+	}
+	if s.cluster.FailoverMode != "automatic" || s.controllerState == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "automatic recovery controller is not enabled"})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.controllerState.StateSnapshot())
 }

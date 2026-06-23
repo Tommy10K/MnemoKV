@@ -6,7 +6,12 @@ import type {
   MetricsSummary,
   NodeEvent,
   PeerStatus,
+  RecoveryPlanStatus,
+  RecoverySlotStatus,
+  RecoveryState,
+  RecoveryStatus,
   SlotStatus,
+  ControllerStateResponse,
 } from "./types"
 
 export class ResponseValidationError extends Error {
@@ -24,6 +29,7 @@ export function parseHealthResponse(value: unknown): HealthResponse {
     status: string(obj.status, "/health", "status"),
     nodeId: string(obj.nodeId, "/health", "nodeId"),
     mode: string(obj.mode, "/health", "mode"),
+    dataState: optionalString(obj.dataState, "/health", "dataState"),
   }
 }
 
@@ -59,6 +65,58 @@ export function parseClusterStateResponse(value: unknown): ClusterStateResponse 
     ),
     membership: optionalArray(obj.membership, "/cluster/state", "membership")?.map(parsePeer),
     slots: optionalArray(obj.slots, "/cluster/state", "slots")?.map(parseSlot),
+    dataState: optionalString(obj.dataState, "/cluster/state", "dataState"),
+    recovery: obj.recovery === undefined ? undefined : parseRecoveryStatus(obj.recovery, "/cluster/state.recovery"),
+  }
+}
+
+export function parseControllerStateResponse(value: unknown): ControllerStateResponse {
+  const source = "/controller/state"
+  const obj = object(value, source)
+  const last = obj.lastRebalance === undefined ? undefined : object(obj.lastRebalance, source, "lastRebalance")
+  const view = object(obj.currentView, source, "currentView")
+  return {
+    nodeId: string(obj.nodeId, source, "nodeId"),
+    raftRole: string(obj.raftRole, source, "raftRole"),
+    raftLeaderId: optionalString(obj.raftLeaderId, source, "raftLeaderId"),
+    raftTerm: finiteNumber(obj.raftTerm, source, "raftTerm"),
+    isLeader: boolean(obj.isLeader, source, "isLeader"),
+    controlIndex: finiteNumber(obj.controlIndex, source, "controlIndex"),
+    currentView: {
+      clusterId: string(view.clusterId, source, "currentView.clusterId"),
+      metadataVersion: finiteNumber(view.metadataVersion, source, "currentView.metadataVersion"),
+      observedAt: optionalString(view.observedAt, source, "currentView.observedAt"),
+      status: string(view.status, source, "currentView.status"),
+      nodes: array(view.nodes, source, "currentView.nodes").map((item, index) => {
+        const node = object(item, source, `currentView.nodes[${index}]`)
+        return {
+          id: string(node.id, source, `currentView.nodes[${index}].id`),
+          reachable: boolean(node.reachable, source, `currentView.nodes[${index}].reachable`),
+          suspected: boolean(node.suspected, source, `currentView.nodes[${index}].suspected`),
+          eligible: boolean(node.eligible, source, `currentView.nodes[${index}].eligible`),
+          returning: boolean(node.returning, source, `currentView.nodes[${index}].returning`),
+          leaderSlots: finiteNumber(node.leaderSlots, source, `currentView.nodes[${index}].leaderSlots`),
+          replicaSlots: finiteNumber(node.replicaSlots, source, `currentView.nodes[${index}].replicaSlots`),
+        }
+      }),
+      slots: array(view.slots, source, "currentView.slots").map((item, index) => {
+        const slot = object(item, source, `currentView.slots[${index}]`)
+        return {
+          number: finiteNumber(slot.number, source, `currentView.slots[${index}].number`),
+          leaderId: string(slot.leaderId, source, `currentView.slots[${index}].leaderId`),
+          replicaId: optionalString(slot.replicaId, source, `currentView.slots[${index}].replicaId`),
+          term: finiteNumber(slot.term, source, `currentView.slots[${index}].term`),
+          replicaReady: boolean(slot.replicaReady, source, `currentView.slots[${index}].replicaReady`),
+        }
+      }),
+    },
+    recovery: parseRecoveryStatus(obj.recovery, `${source}.recovery`),
+    lastRebalance: last === undefined ? undefined : {
+      id: string(last.id, source, "lastRebalance.id"),
+      kind: string(last.kind, source, "lastRebalance.kind"),
+      epoch: finiteNumber(last.epoch, source, "lastRebalance.epoch"),
+      controlIndex: finiteNumber(last.controlIndex, source, "lastRebalance.controlIndex"),
+    },
   }
 }
 
@@ -104,7 +162,61 @@ export function parseNodeEvent(value: unknown): NodeEvent {
     rejectedWrites: optionalNumber(obj.rejectedWrites, source, "rejectedWrites"),
     counters:
       obj.counters === undefined ? undefined : numberRecord(obj.counters, source, "counters"),
+    recovery: obj.recovery === undefined ? undefined : parseRecoveryStatus(obj.recovery, `${source}.recovery`),
   }
+}
+
+function parseRecoveryStatus(value: unknown, source: string): RecoveryStatus {
+  const obj = object(value, source)
+  const state = string(obj.state, source, "state")
+  if (!isRecoveryState(state)) fail(source, `state ${JSON.stringify(state)} is invalid`)
+  return {
+    state,
+    controlIndex: finiteNumber(obj.controlIndex, source, "controlIndex"),
+    failedNodes: optionalStringArray(obj.failedNodes, source, "failedNodes"),
+    suspectedNodes: optionalStringArray(obj.suspectedNodes, source, "suspectedNodes"),
+    oneCopySlots: optionalArray(obj.oneCopySlots, source, "oneCopySlots")?.map((item, index) => parseRecoverySlot(item, source, "oneCopySlots", index)),
+    unavailableSlots: optionalArray(obj.unavailableSlots, source, "unavailableSlots")?.map((item, index) => parseRecoverySlot(item, source, "unavailableSlots", index)),
+    activePlan: obj.activePlan === undefined ? undefined : parseRecoveryPlan(obj.activePlan, source),
+    latestCommittedOperation: optionalString(obj.latestCommittedOperation, source, "latestCommittedOperation"),
+    warning: optionalString(obj.warning, source, "warning"),
+    returningNodeDataPolicy: optionalString(obj.returningNodeDataPolicy, source, "returningNodeDataPolicy"),
+  }
+}
+
+function parseRecoveryPlan(value: unknown, source: string): RecoveryPlanStatus {
+  const obj = object(value, source, "activePlan")
+  return {
+    id: string(obj.id, source, "activePlan.id"),
+    kind: string(obj.kind, source, "activePlan.kind"),
+    reason: string(obj.reason, source, "activePlan.reason"),
+    completedSteps: finiteNumber(obj.completedSteps, source, "activePlan.completedSteps"),
+    totalSteps: finiteNumber(obj.totalSteps, source, "activePlan.totalSteps"),
+  }
+}
+
+function parseRecoverySlot(value: unknown, source: string, field: string, index: number): RecoverySlotStatus {
+  const prefix = `${field}[${index}]`
+  const obj = object(value, source, prefix)
+  return {
+    slot: finiteNumber(obj.slot, source, `${prefix}.slot`),
+    classification: string(obj.classification, source, `${prefix}.classification`),
+    formerLeaderId: string(obj.formerLeaderId, source, `${prefix}.formerLeaderId`),
+    formerReplicaId: optionalString(obj.formerReplicaId, source, `${prefix}.formerReplicaId`),
+    failures: optionalStringArray(obj.failures, source, `${prefix}.failures`),
+    readsAvailable: boolean(obj.readsAvailable, source, `${prefix}.readsAvailable`),
+    writesAvailable: boolean(obj.writesAvailable, source, `${prefix}.writesAvailable`),
+    rejectedCommands: optionalStringArray(obj.rejectedCommands, source, `${prefix}.rejectedCommands`),
+    message: string(obj.message, source, `${prefix}.message`),
+  }
+}
+
+function isRecoveryState(value: string): value is RecoveryState {
+  return ["healthy", "failure_suspected", "degraded", "promoting", "repairing", "rebalancing", "unavailable", "potential_data_loss", "starting"].includes(value)
+}
+
+function optionalStringArray(value: unknown, source: string, field: string): string[] | undefined {
+  return optionalArray(value, source, field)?.map((item, index) => string(item, source, `${field}[${index}]`))
 }
 
 function parsePeer(value: unknown, index: number): PeerStatus {

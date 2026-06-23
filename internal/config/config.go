@@ -12,6 +12,7 @@ type Config struct {
 	Network       NetworkConfig       `yaml:"network"`
 	Engine        EngineConfig        `yaml:"engine"`
 	Cluster       ClusterConfig       `yaml:"cluster"`
+	ControlPlane  ControlPlaneConfig  `yaml:"controlPlane"`
 	Persistence   PersistenceConfig   `yaml:"persistence"`
 	Observability ObservabilityConfig `yaml:"observability"`
 }
@@ -41,14 +42,35 @@ type EngineConfig struct {
 
 // ClusterConfig describes the fixed-slot cluster topology.
 type ClusterConfig struct {
-	ID                 string       `yaml:"id"`
-	Enabled            bool         `yaml:"enabled"`
-	ShardingEnabled    bool         `yaml:"shardingEnabled"`
-	ReplicationEnabled bool         `yaml:"replicationEnabled"`
-	SlotCount          uint32       `yaml:"slotCount"`
-	RoutingMode        string       `yaml:"routingMode"`
-	FailoverMode       string       `yaml:"failoverMode"`
-	Peers              []PeerConfig `yaml:"peers"`
+	ID                 string           `yaml:"id"`
+	Enabled            bool             `yaml:"enabled"`
+	ShardingEnabled    bool             `yaml:"shardingEnabled"`
+	ReplicationEnabled bool             `yaml:"replicationEnabled"`
+	SlotCount          uint32           `yaml:"slotCount"`
+	RoutingMode        string           `yaml:"routingMode"`
+	FailoverMode       string           `yaml:"failoverMode"`
+	Controller         ControllerConfig `yaml:"controller"`
+	Peers              []PeerConfig     `yaml:"peers"`
+}
+
+// ControllerConfig configures the embedded Raft controller. It is ignored in
+// manual mode and validated as a complete unit in automatic mode.
+type ControllerConfig struct {
+	ControlPort            int    `yaml:"controlPort"`
+	RaftDir                string `yaml:"raftDir"`
+	BootstrapNodeID        string `yaml:"bootstrapNodeId"`
+	ObserveIntervalMs      int    `yaml:"observeIntervalMs"`
+	FailureTimeoutMs       int    `yaml:"failureTimeoutMs"`
+	ConsecutiveFailures    int    `yaml:"consecutiveFailures"`
+	RebalanceSkewThreshold int    `yaml:"rebalanceSkewThreshold"`
+	MigrationRateLimit     int    `yaml:"migrationRateLimit"`
+}
+
+// ControlPlaneConfig contains node-side credentials used to authenticate
+// controller administration calls. It is intentionally separate from data
+// snapshots and the ordinary cluster metadata model.
+type ControlPlaneConfig struct {
+	RequestSigningSecret string `yaml:"requestSigningSecret"`
 }
 
 // PersistenceConfig governs periodic and manual engine snapshots.
@@ -63,9 +85,11 @@ type PersistenceConfig struct {
 
 // PeerConfig identifies one peer in a static cluster definition.
 type PeerConfig struct {
-	ID         string `yaml:"id"`
-	Address    string `yaml:"address"`
-	APIAddress string `yaml:"apiAddress"`
+	ID             string `yaml:"id"`
+	Address        string `yaml:"address"`
+	APIAddress     string `yaml:"apiAddress"`
+	ControlAddress string `yaml:"controlAddress"`
+	FailoverMode   string `yaml:"failoverMode"`
 }
 
 // ObservabilityConfig governs the HTTP API and logging.

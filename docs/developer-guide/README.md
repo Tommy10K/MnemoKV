@@ -14,9 +14,10 @@ suggests concrete files or tests to inspect.
 5. [Memory limits, eviction, and observability](05-memory-eviction-and-observability.md)
 6. [Snapshots and recovery](06-snapshots-and-recovery.md)
 7. [Cluster routing, replication, repair, and failover](07-cluster-routing-replication-and-failover.md)
-8. [React frontend architecture and features](08-frontend-architecture-and-features.md)
-9. [Testing, debugging, and extending the system](09-testing-debugging-and-extending.md)
-10. [Recommended full-project demonstration](10-demo-walkthrough.md)
+8. [Automatic failure recovery control plane](11-automatic-failure-recovery-control-plane.md)
+9. [React frontend architecture and features](08-frontend-architecture-and-features.md)
+10. [Testing, debugging, and extending the system](09-testing-debugging-and-extending.md)
+11. [Recommended full-project demonstration](10-demo-walkthrough.md)
 
 ## Sources Of Truth
 
@@ -35,6 +36,7 @@ semantics, cluster write safety, or failover:
 - [ADR 003: memory and eviction](../adr/003-memory-and-eviction-semantics.md)
 - [ADR 004: cluster write safety](../adr/004-cluster-write-safety.md)
 - [ADR 005: failover](../adr/005-failover-semantics.md)
+- [ADR 006: automatic recovery control plane](../adr/006-automatic-recovery-control-plane.md)
 
 After completing this guide, a developer should be able to trace a command from a socket or HTTP
 request to the in-memory value, explain concurrency and memory guarantees, describe snapshot and

@@ -80,7 +80,7 @@ func startAPI(t *testing.T) (string, func()) {
 	server := api.New(
 		config.ObservabilityConfig{APIBindAddr: "127.0.0.1", APIPort: port},
 		config.NodeConfig{ID: "api-smoke", Mode: "standalone"},
-		config.ClusterConfig{}, eng, sink, clusterManager, nil,
+		config.ClusterConfig{}, config.ControlPlaneConfig{}, eng, sink, clusterManager, nil,
 	)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)

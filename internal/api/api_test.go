@@ -27,6 +27,7 @@ func newTestServer() *Server {
 		config.ObservabilityConfig{},
 		config.NodeConfig{ID: "test", Mode: "standalone"},
 		config.ClusterConfig{},
+		config.ControlPlaneConfig{},
 		eng, sink, cluMgr, nil,
 	)
 }

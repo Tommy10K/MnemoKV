@@ -3,11 +3,15 @@
 ## Supported Cluster, Precisely
 
 MnemoKV supports a static two-to-five-node educational cluster. Every node is both a data node and
-a gateway. It uses fixed slots, proxy routing, one synchronous replica per slot, local heartbeat
-observations, and manual failover. It does not use Raft or another consensus protocol.
+a gateway. It uses fixed slots, proxy routing, one synchronous replica per slot, and local heartbeat
+observations. Failover mode is selected statically: `manual` keeps the operator-driven path; the
+five-node `automatic` mode embeds a control-plane-only Raft voter in every node.
 
-Read [ADR 004](../adr/004-cluster-write-safety.md) and
-[ADR 005](../adr/005-failover-semantics.md) before changing this package.
+Read [ADR 004](../adr/004-cluster-write-safety.md),
+[ADR 005](../adr/005-failover-semantics.md), and
+[ADR 006](../adr/006-automatic-recovery-control-plane.md) before changing this package. For the
+automatic-mode implementation walkthrough, read
+[Automatic failure recovery control plane](11-automatic-failure-recovery-control-plane.md).
 
 ## Authoritative Metadata
 
@@ -104,6 +108,50 @@ the replica not ready. Writes remain unavailable until full-slot synchronization
 
 The APIs and CLI intentionally keep promotion, assignment, and sync as three separate operations.
 
+## Automatic Recovery Control Plane
+
+[`internal/controller`](../../internal/controller/) is optional and remains outside the RESP/HTTP
+command path. Its leader polls `/health` and `/cluster/state`, commits a quorum-consistent view, and
+classifies each slot from the effective eligible topology:
+
+- both ready owners reachable: unaffected;
+- leader unavailable and replica reachable: promote, assign, and synchronize;
+- leader reachable and replica unavailable: assign and synchronize while reads continue;
+- neither authoritative copy reachable: mark `potential_data_loss` without creating empty data.
+
+Recovery plans and each completed step are replicated through Hashicorp Raft. Execution is
+idempotent and resumes after leadership or process changes. Once all slots again have two ready
+copies, the planner rebalances leaders and replicas across eligible nodes through the same bounded
+full-slot synchronization path.
+
+Automatic topology calls use HMAC authentication and a persisted, monotonic control index under
+`controller.raftDir`. Unsigned manual calls are rejected in automatic mode. Without three of five
+Raft voters, no ownership change can commit; unaffected data slots continue using their existing
+metadata.
+
+Required automatic configuration is demonstrated by `configs/cluster-node-{1..5}-auto.yaml`:
+
+```yaml
+cluster:
+  failoverMode: automatic
+  controller:
+    controlPort: 7481
+    raftDir: ./data/auto/node-1/controller
+    bootstrapNodeId: node-1
+    observeIntervalMs: 1000
+    failureTimeoutMs: 10000
+    consecutiveFailures: 3
+    rebalanceSkewThreshold: 1
+    migrationRateLimit: 10
+controlPlane:
+  requestSigningSecret: mnemokv-local-demo-controller-secret
+```
+
+All five peer entries must use `failoverMode: automatic`, unique control addresses, and identical
+peer identity/address lists. `GET /controller/state` reports Raft role/term/leader, the committed
+view, active-plan progress, unavailable slots, and the last completed rebalance. `/cluster/state`
+and SSE carry the same recovery state used by metrics and logs.
+
 ## Returning Nodes And Metadata Distribution
 
 Admin changes are broadcast through `CLUSTERAPPLY`. Nodes reject mismatched clusters, peers, slot
@@ -111,8 +159,14 @@ counts, older versions, and invalid terms. At startup a node requests `CLUSTERME
 adopts the newest compatible version. A stale returning node therefore cannot automatically reclaim
 leadership.
 
-This is not consensus. Concurrent operators can still create coordination problems, and metadata
-availability is not quorum-backed. That is why failover is manual and the supported scope is small.
+In manual mode this distribution is not consensus, so concurrent operators can still create
+coordination problems. In automatic mode, a restarted node is instead fenced as `recovering`: it
+keeps its node/Raft identity but clears application data and snapshots, installs current committed
+metadata, and becomes eligible only after Raft-backed admission. Its stale data is never used to
+resolve `potential_data_loss`.
+
+The automatic guarantee is one failure at a time with full repair between failures. There is a real
+degraded window; a second destructive failure during it can make a slot unavailable.
 
 ## Best Tests To Read
 
@@ -121,3 +175,5 @@ availability is not quorum-backed. That is why failover is manual and the suppor
 - [`test/cluster/cluster_test.go`](../../test/cluster/cluster_test.go): multi-node routing, failure, repair, and stale rejoin.
 - [`test/failover/failover_test.go`](../../test/failover/failover_test.go): stale metadata and term fencing.
 - [`scripts/demo-cluster.ps1`](../../scripts/demo-cluster.ps1): repeatable process-level demonstration.
+- [`internal/controller/harness_test.go`](../../internal/controller/harness_test.go): five managers plus five in-memory Raft voters.
+- [`scripts/demo-automatic-recovery.ps1`](../../scripts/demo-automatic-recovery.ps1): five-process automatic recovery and optional return demo.

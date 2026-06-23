@@ -7,6 +7,7 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/engine/state", s.handleEngineState)
 	mux.HandleFunc("/metrics/summary", s.handleMetricsSummary)
 	mux.HandleFunc("/cluster/state", s.handleClusterState)
+	mux.HandleFunc("/controller/state", s.handleControllerState)
 	mux.HandleFunc("/events", s.handleEvents)
 	mux.HandleFunc("/commands", s.handleCommands)
 	mux.HandleFunc("/engine/eviction-policy", s.handleEvictionPolicy)
@@ -14,4 +15,6 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/cluster/promote", s.handleClusterPromote)
 	mux.HandleFunc("/cluster/replica", s.handleClusterReplica)
 	mux.HandleFunc("/cluster/sync", s.handleClusterSync)
+	mux.HandleFunc("/cluster/returning/prepare", s.handleReturningNodePrepare)
+	mux.HandleFunc("/cluster/returning/admit", s.handleReturningNodeAdmit)
 }

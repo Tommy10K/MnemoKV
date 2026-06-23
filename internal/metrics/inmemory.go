@@ -94,3 +94,13 @@ func (m *InMemory) Snapshot() map[string]uint64 {
 	}
 	return out
 }
+
+func (m *InMemory) GaugesSnapshot() map[string]float64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make(map[string]float64, len(m.gauges))
+	for key, value := range m.gauges {
+		out[key] = value
+	}
+	return out
+}

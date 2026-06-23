@@ -181,6 +181,36 @@ func (m *Manager) Start(ctx context.Context) {
 
 func (m *Manager) Wait() { m.wg.Wait() }
 
+// Invalidate removes application snapshots without decoding or inspecting
+// their data. Controller Raft state lives in a separate directory and is not
+// touched by this operation.
+func (m *Manager) Invalidate() (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entries, err := os.ReadDir(m.cfg.DataDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("read snapshot directory: %w", err)
+	}
+	removed := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if _, ok := formatForFilename(entry.Name()); !ok {
+			continue
+		}
+		path := filepath.Join(m.cfg.DataDir, entry.Name())
+		if err := os.Remove(path); err != nil {
+			return removed, fmt.Errorf("remove obsolete snapshot %q: %w", path, err)
+		}
+		removed++
+	}
+	return removed, nil
+}
+
 type validSnapshot struct {
 	path  string
 	model *snapshot.Model

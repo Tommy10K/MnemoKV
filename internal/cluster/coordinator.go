@@ -36,6 +36,9 @@ func (c *Coordinator) Execute(cmd *resp.Command) resp.Frame {
 	case "FLUSHDB", "FLUSHALL":
 		return resp.NewError("ERR", "global flush commands are not supported in cluster mode")
 	}
+	if !c.manager.DataAdmitted() {
+		return resp.NewError("CLUSTERDOWN", "node is recovering and not admitted")
+	}
 
 	keys := resp.ExtractKeys(cmd)
 	if len(keys) == 0 {

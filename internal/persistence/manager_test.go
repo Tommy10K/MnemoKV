@@ -199,6 +199,29 @@ func TestDisabledAndMissingSnapshotsReturnTypedErrors(t *testing.T) {
 	}
 }
 
+func TestInvalidateRemovesApplicationSnapshotsWithoutTouchingOtherFiles(t *testing.T) {
+	dir := t.TempDir()
+	cfg := testPersistenceConfig(dir, snapshot.FormatJSON)
+	manager := New(cfg, "node-1", testDataset(t), nil)
+	if _, err := manager.Snapshot(); err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(dir, "controller-state.json")
+	if err := os.WriteFile(other, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := manager.Invalidate()
+	if err != nil || removed != 1 {
+		t.Fatalf("invalidate: removed=%d err=%v", removed, err)
+	}
+	if _, err := os.Stat(other); err != nil {
+		t.Fatalf("non-application file was touched: %v", err)
+	}
+	if _, err := manager.RestoreLatest(); !errors.Is(err, ErrNoSnapshot) {
+		t.Fatalf("obsolete snapshot remained: %v", err)
+	}
+}
+
 func testPersistenceConfig(dir, format string) config.PersistenceConfig {
 	return config.PersistenceConfig{Enabled: true, DataDir: dir, SnapshotIntervalSec: 60, MaxSnapshots: 5, LoadOnStart: true, Format: format}
 }
