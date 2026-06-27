@@ -96,6 +96,7 @@ transport failures.
 | GET | `/engine/state` | memory and eviction state in `handlers.go` |
 | GET | `/metrics/summary` | counter snapshot in `handlers.go` |
 | GET | `/cluster/state` | authoritative slots plus local membership hints |
+| GET | `/controller/state` | automatic-controller role, committed view, plan progress, and last rebalance |
 | GET | `/events` | periodic SSE observability snapshots in `websocket.go` |
 | POST | `/commands` | command execution in `commands.go` |
 | POST | `/engine/eviction-policy` | live future-policy switch in `eviction.go` |
@@ -103,9 +104,15 @@ transport failures.
 | POST | `/cluster/promote` | manual promotion in `cluster_admin.go` |
 | POST | `/cluster/replica` | replacement assignment in `cluster_admin.go` |
 | POST | `/cluster/sync` | full-slot repair in `cluster_admin.go` |
+| POST | `/cluster/returning/prepare` | controller-driven fresh returning-node preparation in `returning_node.go` |
+| POST | `/cluster/returning/admit` | controller-driven returning-node validation and admission in `returning_node.go` |
 
 The file is named `websocket.go` for historical reasons, but the current implementation is
 server-sent events, not WebSocket.
+
+In automatic recovery mode, `/cluster/promote`, `/cluster/replica`, `/cluster/sync`, and the
+returning-node endpoints are not ordinary operator APIs. They require controller authentication and
+a monotonic control index. Unsigned manual calls are still accepted only in manual mode.
 
 ## Trace Exercise
 

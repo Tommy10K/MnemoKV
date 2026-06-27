@@ -24,6 +24,8 @@ go test ./internal/persistence/...
 - [`test/api`](../../test/api/) checks HTTP methods, body limits, JSON strictness, and availability.
 - [`test/cluster`](../../test/cluster/) runs multiple managers and RESP servers through routing,
   replica loss, promotion, repair, and stale rejoin.
+- [`internal/controller`](../../internal/controller/) includes the in-process five-node automatic
+  recovery harness with real cluster managers and in-memory Raft voters.
 - [`test/failover`](../../test/failover/) focuses on stale version and term rejection.
 
 ### Race Tests
@@ -31,6 +33,12 @@ go test ./internal/persistence/...
 Run `go test -race ./...` after changes involving maps, values, expiry, admission, eviction, metrics,
 connections, replication, membership, or persistence. Race tests are especially important because
 ordinary test success does not prove lock correctness.
+
+For automatic recovery work, also run the focused concurrent control-plane path:
+
+```powershell
+go test -race ./internal/controller/... ./internal/cluster/... ./internal/api/...
+```
 
 ### Frontend Tests
 
@@ -84,6 +92,10 @@ For a rejected write, determine whether the failure is routing, missing leader, 
 ready replica, stale term, sequence gap, or memory admission. Do not add retries that hide a
 metadata or ordering violation.
 
+For automatic recovery, distinguish data-node health from controller quorum. A slot owner can be
+unreachable while the controller still has a Raft majority and can repair ownership; conversely, a
+controller minority must not mutate ownership even if some data nodes are healthy.
+
 ## Adding A Public Command
 
 Use this checklist:
@@ -115,3 +127,5 @@ responsive behavior, and an E2E scenario if it is presentation-critical.
 - Update this guide when package ownership, request paths, invariants, or demo order changes.
 - Keep examples executable. Prefer linking to source files over copying large implementation blocks.
 - Never describe local membership observations as consensus or snapshots as a WAL.
+- Never describe automatic recovery as multi-failure data durability; the v1 guarantee is one
+  failure at a time with repair in between.

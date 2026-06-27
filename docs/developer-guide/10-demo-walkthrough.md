@@ -8,7 +8,7 @@ version takes roughly 20-30 minutes; skip the optional deep dives for a shorter 
 Explain that MnemoKV is an educational in-memory store: RESP-compatible command execution in Go,
 observable internals, snapshot persistence, a deliberately small distributed mode, and a React
 learning/operations UI. State the limits early: teaching-grade, snapshots rather than WAL, and
-manual rather than automatic failover.
+automatic recovery that is control-plane-only with a one-failure-at-a-time guarantee.
 
 ## 2. Start Standalone Backend And Frontend
 
@@ -148,7 +148,28 @@ go run ./cmd/adminctl -port 7382 cluster-sync 42 node-3
 Replace `42` and `node-3` with the real affected slot and live replacement. Explain why promotion,
 assignment, and sync are separate and why writes remain unavailable until the replacement is ready.
 
-## 10. Finish With Benchmarks And Scope
+## 10. Demonstrate Automatic Recovery
+
+If time allows, also show the automatic recovery path after the manual cluster explanation. Stop
+the manual cluster first, then run:
+
+```powershell
+./scripts/demo-automatic-recovery.ps1
+```
+
+For the returning-node lifecycle:
+
+```powershell
+./scripts/demo-automatic-recovery.ps1 -ReturnNode
+```
+
+While the script is running, point the frontend API target to one of the automatic node APIs, such
+as `http://127.0.0.1:7382`, and open `/use/cluster`. Explain the visible state transitions:
+`failure_suspected`, `unavailable`, `promoting`, `repairing`, and `rebalancing`. The key message is
+that Raft commits controller decisions, the existing data-node APIs perform promotion and full-slot
+sync, and writes pause only for slots that temporarily lack a ready replica.
+
+## 11. Finish With Benchmarks And Scope
 
 Open `/use/benchmarks` and select **Load built-in example**. Compare latency, bytes, and allocations
 across command families. If time permits, import fresh output from the engine benchmarks.

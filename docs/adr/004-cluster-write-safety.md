@@ -17,3 +17,7 @@ gaps or stale records. Gaps are repaired by a full shard snapshot.
 
 An OK response means the mutation exists in memory on the leader and replica. It does not imply
 disk durability or quorum consensus. Durability remains bounded by snapshot frequency.
+
+Automatic recovery does not change this data-plane contract. The Raft controller in ADR 006 commits
+ownership decisions and recovery progress only; user values are still replicated by this
+leader-to-replica synchronous path.

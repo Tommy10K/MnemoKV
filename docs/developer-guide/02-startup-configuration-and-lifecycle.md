@@ -16,8 +16,15 @@ beside [ADR 001](../adr/001-system-modes.md).
 ## Supported Modes
 
 Standalone mode requires cluster flags to be disabled and the peer list to be empty. Cluster mode
-requires sharding and replication, `routingMode: proxy`, `failoverMode: manual`, a cluster ID, a
-fixed slot count, and two to five unique peers including the local node.
+requires sharding and replication, `routingMode: proxy`, a cluster ID, a fixed slot count, and two
+to five unique peers including the local node.
+
+`cluster.failoverMode` selects the cluster control model at startup:
+
+- `manual` keeps the operator-driven promotion, replica-assignment, and sync APIs.
+- `automatic` starts the embedded Raft-backed controller, requires consistently configured automatic
+  peers with control addresses and Raft directories, and fences topology mutations behind controller
+  signatures.
 
 The `node.mode` string is descriptive. `cluster.enabled` and its validated companion fields choose
 the real execution mode.
@@ -29,6 +36,8 @@ Use these examples as known-good starting points:
 - [`configs/standalone-persistence-json.yaml`](../../configs/standalone-persistence-json.yaml)
 - [`configs/standalone-persistence-binary.yaml`](../../configs/standalone-persistence-binary.yaml)
 - [`configs/cluster-node-1.yaml`](../../configs/cluster-node-1.yaml) and its node-2/node-3 peers
+- [`configs/cluster-node-1-auto.yaml`](../../configs/cluster-node-1-auto.yaml) and its node-2
+  through node-5 automatic peers
 
 ## Composition In `main`
 
@@ -43,7 +52,8 @@ Follow [`cmd/node/main.go`](../../cmd/node/main.go) in this order:
 7. Restore the newest valid snapshot before opening listeners when configured.
 8. Select `engine.Engine` or `cluster.Coordinator` as the command executor.
 9. Construct both RESP and HTTP servers with that executor.
-10. Start cluster metadata synchronization, membership probes, periodic snapshots, and listeners.
+10. Start cluster metadata synchronization, membership probes, optional automatic controller,
+    periodic snapshots, and listeners.
 
 This order matters. Restoring metadata before serving cluster traffic prevents a node from briefly
 serving with stale slot ownership.
@@ -84,4 +94,4 @@ go build -o bin/mnemokv-adminctl.exe ./cmd/adminctl
   tests, and documentation updates.
 - Do not silently accept unsupported combinations; explicit startup failure is part of the design.
 - A setting used only at startup must not be presented as live-reconfigurable in the frontend.
-- Keep the two modes narrow. New replication or failover choices require an ADR-level decision.
+- Keep the supported modes narrow. New replication or failover choices require an ADR-level decision.

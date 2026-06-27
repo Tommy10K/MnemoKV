@@ -76,6 +76,12 @@ counters, gauges, latencies, and a bounded event list. The engine emits:
 The TCP server also observes transport-level command latency and connection rejection. API handlers
 read a snapshot rather than exposing mutable maps.
 
+When automatic recovery is enabled, the controller publishes one-hot gauges named
+`controller.state.<state>` for the public recovery states such as `healthy`, `repairing`, and
+`potential_data_loss`. `/metrics/summary`, `/cluster/state`, `/controller/state`, and SSE use the
+same state names so the frontend and terminal demo do not translate between private controller
+terms and public status terms.
+
 ## SSE Observability
 
 [`internal/api/websocket.go`](../../internal/api/websocket.go) periodically emits JSON over
