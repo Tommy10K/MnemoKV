@@ -10,14 +10,15 @@ suggests concrete files or tests to inspect.
 1. [Project purpose and system map](01-project-purpose-and-system-map.md)
 2. [Startup, configuration, and lifecycle](02-startup-configuration-and-lifecycle.md)
 3. [RESP, HTTP, and command request paths](03-protocol-command-and-api-paths.md)
-4. [Engine, data structures, and concurrency](04-engine-data-structures-and-concurrency.md)
-5. [Memory limits, eviction, and observability](05-memory-eviction-and-observability.md)
-6. [Snapshots and recovery](06-snapshots-and-recovery.md)
-7. [Cluster routing, replication, repair, and failover](07-cluster-routing-replication-and-failover.md)
-8. [Automatic failure recovery control plane](11-automatic-failure-recovery-control-plane.md)
-9. [React frontend architecture and features](08-frontend-architecture-and-features.md)
-10. [Testing, debugging, and extending the system](09-testing-debugging-and-extending.md)
-11. [Recommended full-project demonstration](10-demo-walkthrough.md)
+4. [RESP command reference](12-resp-command-reference.md)
+5. [Engine, data structures, and concurrency](04-engine-data-structures-and-concurrency.md)
+6. [Memory limits, eviction, and observability](05-memory-eviction-and-observability.md)
+7. [Snapshots and recovery](06-snapshots-and-recovery.md)
+8. [Cluster routing, replication, repair, and failover](07-cluster-routing-replication-and-failover.md)
+9. [Automatic failure recovery control plane](11-automatic-failure-recovery-control-plane.md)
+10. [React frontend architecture and features](08-frontend-architecture-and-features.md)
+11. [Testing, debugging, and extending the system](09-testing-debugging-and-extending.md)
+12. [Recommended full-project demonstration](10-demo-walkthrough.md)
 
 ## Sources Of Truth
 
