@@ -90,7 +90,7 @@ function ClusterView({
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-lg border border-[#1f2937] bg-[#0b0f17] p-4">
           <h2 className="mb-3 text-sm uppercase tracking-wide text-[#8b949e]">Slot assignments</h2>
-          <div className="max-h-80 overflow-auto" tabIndex={0} aria-label="Scrollable slot assignments">
+          <div className="max-h-[44rem] overflow-auto" tabIndex={0} aria-label="Scrollable slot assignments">
             <table className="w-full text-left text-sm">
               <caption className="sr-only">Cluster slot leaders, replicas, terms, and sequences</caption>
               <thead className="text-xs uppercase tracking-wide text-[#8b949e]">

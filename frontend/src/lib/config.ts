@@ -1,10 +1,12 @@
 export type Mode = "standalone" | "clustered"
+export type FailoverMode = "manual" | "automatic"
 export type EvictionPolicy = "noeviction" | "fifo" | "lru" | "lfu" | "random"
 
 export type Peer = {
   id: string
   address: string
   apiAddress: string
+  controlAddress: string
 }
 
 export type NodeConfig = {
@@ -22,6 +24,16 @@ export type NodeConfig = {
   shardingEnabled: boolean
   replicationEnabled: boolean
   slotCount: number
+  failoverMode: FailoverMode
+  controllerControlPort: number
+  controllerRaftDir: string
+  controllerBootstrapNodeId: string
+  controllerObserveIntervalMs: number
+  controllerFailureTimeoutMs: number
+  controllerConsecutiveFailures: number
+  controllerRebalanceSkewThreshold: number
+  controllerMigrationRateLimit: number
+  controlPlaneRequestSigningSecret: string
   peers: Peer[]
 }
 
@@ -41,6 +53,16 @@ export function defaultStandalone(): NodeConfig {
     shardingEnabled: false,
     replicationEnabled: false,
     slotCount: 1024,
+    failoverMode: "manual",
+    controllerControlPort: 7481,
+    controllerRaftDir: "./data/node-1/controller",
+    controllerBootstrapNodeId: "node-1",
+    controllerObserveIntervalMs: 1000,
+    controllerFailureTimeoutMs: 10000,
+    controllerConsecutiveFailures: 3,
+    controllerRebalanceSkewThreshold: 1,
+    controllerMigrationRateLimit: 10,
+    controlPlaneRequestSigningSecret: "mnemokv-local-demo-controller-secret",
     peers: [],
   }
 }
@@ -50,7 +72,20 @@ export function defaultClusterPeers(count: number): Peer[] {
     id: `node-${i + 1}`,
     address: `127.0.0.1:${6381 + i}`,
     apiAddress: `127.0.0.1:${7381 + i}`,
+    controlAddress: `127.0.0.1:${7481 + i}`,
   }))
+}
+
+export function peersForAutomaticMode(peers: Peer[]): Peer[] {
+  const withControlAddresses = peers.map((peer, i) => ({
+    ...peer,
+    controlAddress: peer.controlAddress.trim() || `127.0.0.1:${7481 + i}`,
+  }))
+
+  if (withControlAddresses.length >= 5) {
+    return withControlAddresses
+  }
+  return [...withControlAddresses, ...defaultClusterPeers(5).slice(withControlAddresses.length)]
 }
 
 export function configToYaml(c: NodeConfig): string {
@@ -82,23 +117,43 @@ export function configToYaml(c: NodeConfig): string {
   if (c.mode === "clustered") {
     lines.push(`  slotCount: ${c.slotCount}`)
     lines.push("  routingMode: proxy")
-    lines.push("  failoverMode: manual")
+    lines.push(`  failoverMode: ${c.failoverMode}`)
+    if (c.failoverMode === "automatic") {
+      lines.push("  controller:")
+      lines.push(`    controlPort: ${c.controllerControlPort}`)
+      lines.push(`    raftDir: ${c.controllerRaftDir}`)
+      lines.push(`    bootstrapNodeId: ${c.controllerBootstrapNodeId}`)
+      lines.push(`    observeIntervalMs: ${c.controllerObserveIntervalMs}`)
+      lines.push(`    failureTimeoutMs: ${c.controllerFailureTimeoutMs}`)
+      lines.push(`    consecutiveFailures: ${c.controllerConsecutiveFailures}`)
+      lines.push(`    rebalanceSkewThreshold: ${c.controllerRebalanceSkewThreshold}`)
+      lines.push(`    migrationRateLimit: ${c.controllerMigrationRateLimit}`)
+    }
     lines.push("  peers:")
     for (const peer of c.peers) {
       lines.push(`    - id: ${peer.id}`)
       lines.push(`      address: ${peer.address}`)
       lines.push(`      apiAddress: ${peer.apiAddress}`)
+      if (c.failoverMode === "automatic") {
+        lines.push(`      controlAddress: ${peer.controlAddress}`)
+        lines.push("      failoverMode: automatic")
+      }
     }
   } else {
     lines.push("  peers: []")
   }
+  if (c.mode === "clustered" && c.failoverMode === "automatic") {
+    lines.push("")
+    lines.push("controlPlane:")
+    lines.push(`  requestSigningSecret: ${c.controlPlaneRequestSigningSecret}`)
+  }
   lines.push("")
   lines.push("persistence:")
-  lines.push(`  enabled: ${c.mode === "clustered"}`)
+  lines.push(`  enabled: ${c.mode === "clustered" && c.failoverMode !== "automatic"}`)
   lines.push(`  dataDir: ${c.dataDir}`)
   lines.push("  snapshotIntervalSec: 60")
   lines.push("  maxSnapshots: 5")
-  lines.push("  loadOnStart: true")
+  lines.push(`  loadOnStart: ${c.failoverMode !== "automatic"}`)
   lines.push("  format: json")
   lines.push("")
   lines.push("observability:")
@@ -135,6 +190,37 @@ export function validate(c: NodeConfig): ValidationError[] {
     }
     if (new Set(c.peers.map((peer) => peer.apiAddress)).size !== c.peers.length) {
       errors.push({ field: "peers", message: "Peer API addresses must be unique" })
+    }
+    if (c.failoverMode === "automatic") {
+      if (c.peers.length < 3) {
+        errors.push({ field: "peers", message: "Automatic failover needs at least 3 peers" })
+      }
+      if (c.peers.some((peer) => !peer.controlAddress.trim())) {
+        errors.push({ field: "peers", message: "Every automatic peer needs a controller address" })
+      }
+      if (new Set(c.peers.map((peer) => peer.controlAddress)).size !== c.peers.length) {
+        errors.push({ field: "peers", message: "Peer controller addresses must be unique" })
+      }
+      if (c.controllerControlPort < 1 || c.controllerControlPort > 65535) {
+        errors.push({ field: "controllerControlPort", message: "Controller port must be 1-65535" })
+      }
+      if (!c.controllerRaftDir.trim()) {
+        errors.push({ field: "controllerRaftDir", message: "Controller Raft directory is required" })
+      }
+      if (!c.controllerBootstrapNodeId.trim()) {
+        errors.push({ field: "controllerBootstrapNodeId", message: "Bootstrap node id is required" })
+      } else if (!c.peers.some((peer) => peer.id === c.controllerBootstrapNodeId)) {
+        errors.push({ field: "controllerBootstrapNodeId", message: "Bootstrap node id must be in the peer list" })
+      }
+      if (c.controllerObserveIntervalMs <= 0 || c.controllerFailureTimeoutMs <= 0 || c.controllerConsecutiveFailures <= 0) {
+        errors.push({ field: "controllerTiming", message: "Controller observation settings must be positive" })
+      }
+      if (c.controllerRebalanceSkewThreshold <= 0 || c.controllerMigrationRateLimit <= 0) {
+        errors.push({ field: "controllerRebalance", message: "Controller rebalance settings must be positive" })
+      }
+      if (!c.controlPlaneRequestSigningSecret.trim()) {
+        errors.push({ field: "controlPlaneRequestSigningSecret", message: "Request signing secret is required" })
+      }
     }
   }
   return errors

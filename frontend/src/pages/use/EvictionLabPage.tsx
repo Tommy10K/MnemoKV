@@ -122,10 +122,14 @@ export function EvictionLabPage() {
           </section>
 
           <section className="grid gap-4 sm:grid-cols-2">
-            <Card label="Available bytes">
-              <div className="text-2xl text-white">{formatBytes(availableBytes)}</div>
+            <Card label={memoryLimit > 0 ? "Limit remaining" : "Configured limit"}>
+              <div className="text-2xl text-white">
+                {memoryLimit > 0 ? formatBytes(availableBytes) : "No hard limit"}
+              </div>
               <div className="mt-1 text-xs text-[#9ca3af]">
-                before the next memory-growing write must evict or fail
+                {memoryLimit > 0
+                  ? "before the next memory-growing write must evict or fail"
+                  : "memoryLimitBytes is 0, so eviction will not be triggered by max memory"}
               </div>
             </Card>
             <Card label="Rejected writes">

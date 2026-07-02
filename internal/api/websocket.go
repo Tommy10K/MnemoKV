@@ -46,7 +46,7 @@ func (s *Server) snapshotPayload() map[string]any {
 		"timestamp":      time.Now().Unix(),
 		"usedBytes":      mem.Used(),
 		"memoryLimit":    mem.Limit(),
-		"availableBytes": mem.Available(),
+		"availableBytes": apiAvailableBytes(mem),
 		"policy":         s.engine.Eviction().Policy().Name(),
 	}
 	if s.metrics != nil {

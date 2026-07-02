@@ -3,7 +3,7 @@ node:
   mode: clustered
   dataDir: ./data/auto/node-1
 network: {bindAddr: 127.0.0.1, port: 6381, maxConnections: 1024, readTimeoutMs: 30000, writeTimeoutMs: 30000}
-engine: {stripeCount: 32, memoryLimitBytes: 0, evictionPolicy: lru}
+engine: {stripeCount: 32, memoryLimitBytes: 1048576, evictionPolicy: lru}
 cluster:
   id: demo-auto-cluster
   enabled: true

@@ -57,6 +57,23 @@ func TestLoadStandalonePresets(t *testing.T) {
 	}
 }
 
+func TestLoadAllCheckedInConfigs(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join("..", "..", "configs", "*.yaml"))
+	if err != nil {
+		t.Fatalf("glob configs: %v", err)
+	}
+	if len(paths) == 0 {
+		t.Fatal("no config files found")
+	}
+	for _, path := range paths {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			if _, err := Load(path); err != nil {
+				t.Fatalf("load: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidatePersistence(t *testing.T) {
 	base := Config{
 		Node:        NodeConfig{ID: "n", DataDir: "./data"},

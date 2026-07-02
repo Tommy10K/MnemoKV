@@ -12,7 +12,7 @@ network:
 
 engine:
   stripeCount: 8
-  memoryLimitBytes: 512
+  memoryLimitBytes: 250
   evictionPolicy: noeviction
 
 cluster:

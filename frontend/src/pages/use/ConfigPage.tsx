@@ -4,8 +4,10 @@ import {
   configToYaml,
   defaultClusterPeers,
   defaultStandalone,
+  peersForAutomaticMode,
   validate,
   type EvictionPolicy,
+  type FailoverMode,
   type Mode,
   type NodeConfig,
   type Peer,
@@ -14,6 +16,7 @@ import { downloadFile } from "@/lib/download"
 import { useAppStore } from "@/store/appStore"
 
 const evictionPolicies: EvictionPolicy[] = ["noeviction", "fifo", "lru", "lfu", "random"]
+const failoverModes: FailoverMode[] = ["manual", "automatic"]
 
 export function ConfigPage() {
   const setApiBaseUrl = useAppStore((state) => state.setApiBaseUrl)
@@ -26,10 +29,29 @@ export function ConfigPage() {
   }
 
   function switchMode(mode: Mode) {
+    if (mode === "standalone") {
+      setConfig((c) => ({
+        ...c,
+        mode,
+        dataDir: "./data",
+        port: 6380,
+        apiPort: 7380,
+        clusterId: "demo-cluster",
+        shardingEnabled: false,
+        replicationEnabled: false,
+        failoverMode: "manual",
+        peers: [],
+      }))
+      return
+    }
+
     if (mode === "clustered" && config.peers.length === 0) {
       setConfig((c) => ({
         ...c,
         mode,
+        dataDir: "./data/node-1",
+        port: 6381,
+        apiPort: 7381,
         clusterId: "demo-cluster",
         shardingEnabled: true,
         replicationEnabled: true,
@@ -39,6 +61,44 @@ export function ConfigPage() {
       return
     }
     update("mode", mode)
+  }
+
+  function switchFailoverMode(failoverMode: FailoverMode) {
+    setConfig((c) => {
+      if (failoverMode === "automatic") {
+        const peers = peersForAutomaticMode(c.peers.length > 0 ? c.peers : defaultClusterPeers(5))
+        const bootstrapNodeId = peers.some((peer) => peer.id === c.controllerBootstrapNodeId)
+          ? c.controllerBootstrapNodeId
+          : peers[0]?.id ?? "node-1"
+
+        return {
+          ...c,
+          failoverMode,
+          dataDir:
+            c.dataDir === "./data" || c.dataDir === "./data/node-1"
+              ? `./data/auto/${c.id}`
+              : c.dataDir,
+          clusterId: c.clusterId === "demo-cluster" ? "demo-auto-cluster" : c.clusterId,
+          replicationEnabled: true,
+          peers,
+          controllerControlPort: c.controllerControlPort || 7481,
+          controllerRaftDir:
+            c.controllerRaftDir === "./data/node-1/controller" || !c.controllerRaftDir.trim()
+              ? `./data/auto/${c.id}/controller`
+              : c.controllerRaftDir,
+          controllerBootstrapNodeId: bootstrapNodeId,
+          controlPlaneRequestSigningSecret:
+            c.controlPlaneRequestSigningSecret.trim() || "mnemokv-local-demo-controller-secret",
+        }
+      }
+
+      return {
+        ...c,
+        failoverMode,
+        dataDir: c.dataDir === `./data/auto/${c.id}` ? `./data/${c.id}` : c.dataDir,
+        clusterId: c.clusterId === "demo-auto-cluster" ? "demo-cluster" : c.clusterId,
+      }
+    })
   }
 
   function updatePeer(index: number, patch: Partial<Peer>) {
@@ -59,6 +119,7 @@ export function ConfigPage() {
             id: `node-${nextIndex}`,
             address: `127.0.0.1:${6380 + nextIndex}`,
             apiAddress: `127.0.0.1:${7380 + nextIndex}`,
+            controlAddress: `127.0.0.1:${7480 + nextIndex}`,
           },
         ],
       }
@@ -78,6 +139,10 @@ export function ConfigPage() {
   }
 
   const errorByField = new Map(errors.map((e) => [e.field, e.message]))
+  const peerGridClass =
+    config.failoverMode === "automatic"
+      ? "grid gap-2 sm:grid-cols-[1fr_1.25fr_1.25fr_1.25fr_auto]"
+      : "grid gap-2 sm:grid-cols-[1fr_1.4fr_1.4fr_auto]"
 
   return (
     <div className="flex flex-col gap-6">
@@ -144,8 +209,10 @@ export function ConfigPage() {
         {config.mode === "clustered" && (
           <Section title="Cluster">
             <div className="rounded-md border border-sky-500/40 bg-sky-500/10 p-3 text-xs text-sky-200">
-              Cluster mode uses fixed slots, proxy routing, one synchronous replica per shard,
-              and explicit manual failover. Every node must use the same peer list and cluster id.
+              Cluster mode uses fixed slots, proxy routing, and one synchronous replica per shard.
+              Failover is selected at startup: manual keeps operator-driven repair, while automatic
+              starts the embedded controller. Every node must use the same cluster id, peer list,
+              and failover mode.
             </div>
             <Field label="Cluster id" error={errorByField.get("clusterId")}>
               <TextInput value={config.clusterId} onChange={(v) => update("clusterId", v)} />
@@ -153,10 +220,97 @@ export function ConfigPage() {
             <Field label="Slot count" error={errorByField.get("slotCount")}>
               <NumberInput value={config.slotCount} onChange={(v) => update("slotCount", v)} />
             </Field>
+            <Field label="Failover mode">
+              <Segmented
+                options={failoverModes}
+                value={config.failoverMode}
+                onChange={(v) => switchFailoverMode(v)}
+              />
+            </Field>
             <p className="text-xs text-[#9ca3af]">
               Sharding and replication are required in cluster mode. Writes are acknowledged only
-              after the assigned replica applies the next ordered record.
+              after the assigned replica applies the next ordered record. Changing failover mode
+              requires updating every node config and restarting the cluster.
             </p>
+
+            {config.failoverMode === "automatic" && (
+              <div className="flex flex-col gap-3 border-t border-[#1f2937] pt-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#8b949e]">
+                  Automatic controller
+                </h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field
+                    label="Controller port"
+                    error={errorByField.get("controllerControlPort")}
+                  >
+                    <NumberInput
+                      value={config.controllerControlPort}
+                      onChange={(v) => update("controllerControlPort", v)}
+                    />
+                  </Field>
+                  <Field
+                    label="Bootstrap node id"
+                    error={errorByField.get("controllerBootstrapNodeId")}
+                  >
+                    <TextInput
+                      value={config.controllerBootstrapNodeId}
+                      onChange={(v) => update("controllerBootstrapNodeId", v)}
+                    />
+                  </Field>
+                  <Field label="Raft directory" error={errorByField.get("controllerRaftDir")}>
+                    <TextInput
+                      value={config.controllerRaftDir}
+                      onChange={(v) => update("controllerRaftDir", v)}
+                    />
+                  </Field>
+                  <Field
+                    label="Signing secret"
+                    error={errorByField.get("controlPlaneRequestSigningSecret")}
+                  >
+                    <TextInput
+                      value={config.controlPlaneRequestSigningSecret}
+                      onChange={(v) => update("controlPlaneRequestSigningSecret", v)}
+                    />
+                  </Field>
+                  <Field label="Observe interval (ms)" error={errorByField.get("controllerTiming")}>
+                    <NumberInput
+                      value={config.controllerObserveIntervalMs}
+                      onChange={(v) => update("controllerObserveIntervalMs", v)}
+                    />
+                  </Field>
+                  <Field label="Failure timeout (ms)" error={errorByField.get("controllerTiming")}>
+                    <NumberInput
+                      value={config.controllerFailureTimeoutMs}
+                      onChange={(v) => update("controllerFailureTimeoutMs", v)}
+                    />
+                  </Field>
+                  <Field label="Consecutive failures" error={errorByField.get("controllerTiming")}>
+                    <NumberInput
+                      value={config.controllerConsecutiveFailures}
+                      onChange={(v) => update("controllerConsecutiveFailures", v)}
+                    />
+                  </Field>
+                  <Field
+                    label="Rebalance skew"
+                    error={errorByField.get("controllerRebalance")}
+                  >
+                    <NumberInput
+                      value={config.controllerRebalanceSkewThreshold}
+                      onChange={(v) => update("controllerRebalanceSkewThreshold", v)}
+                    />
+                  </Field>
+                  <Field
+                    label="Migration rate limit"
+                    error={errorByField.get("controllerRebalance")}
+                  >
+                    <NumberInput
+                      value={config.controllerMigrationRateLimit}
+                      onChange={(v) => update("controllerMigrationRateLimit", v)}
+                    />
+                  </Field>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
@@ -173,8 +327,15 @@ export function ConfigPage() {
                 <p className="text-xs text-red-400">{errorByField.get("peers")}</p>
               )}
               <div className="flex flex-col gap-2">
+                <div className={`${peerGridClass} text-xs text-[#8b949e]`}>
+                  <span>Node id</span>
+                  <span>RESP address (client/data port)</span>
+                  <span>HTTP API address (dashboard/admin port)</span>
+                  {config.failoverMode === "automatic" && <span>Controller address (Raft port)</span>}
+                  <span className="sr-only">Remove</span>
+                </div>
                 {config.peers.map((peer, i) => (
-                  <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1.4fr_1.4fr_auto]">
+                  <div key={i} className={peerGridClass}>
                     <TextInput
                       value={peer.id}
                       onChange={(v) => updatePeer(i, { id: v })}
@@ -193,6 +354,14 @@ export function ConfigPage() {
                       placeholder="API host:port"
                       ariaLabel={`Peer ${i + 1} API address`}
                     />
+                    {config.failoverMode === "automatic" && (
+                      <TextInput
+                        value={peer.controlAddress}
+                        onChange={(v) => updatePeer(i, { controlAddress: v })}
+                        placeholder="controller host:port"
+                        ariaLabel={`Peer ${i + 1} controller address`}
+                      />
+                    )}
                     <button
                       type="button"
                       onClick={() => removePeer(i)}
@@ -200,7 +369,7 @@ export function ConfigPage() {
                       title="Remove"
                       aria-label={`Remove peer ${peer.id || i + 1}`}
                     >
-                      ×
+                      x
                     </button>
                   </div>
                 ))}
@@ -241,7 +410,7 @@ export function ConfigPage() {
         {errors.length > 0 && (
           <ul className="rounded-md border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-300">
             {errors.map((e, i) => (
-              <li key={i}>• {e.message}</li>
+              <li key={i}>- {e.message}</li>
             ))}
           </ul>
         )}

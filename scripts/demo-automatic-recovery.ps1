@@ -1,6 +1,7 @@
 param(
     [switch]$ReturnNode,
-    [switch]$KeepRunning
+    [switch]$KeepRunning,
+    [int]$PreFailureDelaySeconds = 10
 )
 
 $ErrorActionPreference = "Stop"
@@ -106,6 +107,7 @@ try {
         $config = Join-Path $runRoot "node-$index.yaml"
         $data = (Join-Path $runRoot "data/node-$index").Replace("\", "/")
         $content = (Get-Content -Raw $source).Replace("./data/auto/node-$index", $data)
+        $content = $content.Replace("slotCount: 1024", "slotCount: 512")
         $content = $content.Replace("failureTimeoutMs: 10000", "failureTimeoutMs: 3000")
         $content = $content.Replace("migrationRateLimit: 10", "migrationRateLimit: 500")
         Set-Content -NoNewline -Path $config -Value $content
@@ -116,6 +118,10 @@ try {
     $leader = Wait-ForControllerLeader
     $initial = Wait-ForHealthyTopology @() 5 60
     Write-Host "Automatic cluster is healthy; controller leader is $($leader.nodeId), term $($leader.raftTerm)."
+    if ($PreFailureDelaySeconds -gt 0) {
+        Write-Host "Waiting $PreFailureDelaySeconds seconds before stopping $failedNode."
+        Start-Sleep -Seconds $PreFailureDelaySeconds
+    }
 
     $failedProcess = $processes[$failedNode]
     Stop-Process -Id $failedProcess.Id -Force

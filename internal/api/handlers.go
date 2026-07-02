@@ -33,11 +33,23 @@ func (s *Server) handleEngineState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, EngineStateResponse{
 		UsedBytes:      mem.Used(),
 		MemoryLimit:    mem.Limit(),
-		AvailableBytes: mem.Available(),
+		AvailableBytes: apiAvailableBytes(mem),
 		UsageRatio:     mem.UsageRatio(),
 		EvictionPolicy: policy,
 		RejectedWrites: rejected,
 	})
+}
+
+type memoryView interface {
+	HasLimit() bool
+	Available() uint64
+}
+
+func apiAvailableBytes(mem memoryView) uint64 {
+	if !mem.HasLimit() {
+		return 0
+	}
+	return mem.Available()
 }
 
 func (s *Server) handleMetricsSummary(w http.ResponseWriter, r *http.Request) {

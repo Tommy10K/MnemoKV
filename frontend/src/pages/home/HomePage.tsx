@@ -7,7 +7,7 @@ const features = [
   "Memory limits with FIFO, LRU, LFU, and Random eviction",
   "Fixed-slot cluster routing through any node",
   "Synchronous leader-to-replica write acknowledgement",
-  "Manual failover, full-shard repair, and stale-node fencing",
+  "Manual repair or opt-in automatic recovery with stale-node fencing",
 ]
 
 export function HomePage() {
@@ -21,7 +21,8 @@ export function HomePage() {
         </p>
         <p className="max-w-2xl rounded-md border border-sky-500/40 bg-sky-500/10 p-3 text-sm text-sky-200">
           Standalone mode, snapshots, and the fixed-slot cluster path share the same command
-          engine. Cluster failover is deliberately manual rather than consensus-based.
+          engine. Cluster failover is a startup choice: manual operator repair or the embedded
+          automatic recovery controller.
         </p>
       </section>
 

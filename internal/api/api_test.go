@@ -91,6 +91,9 @@ func TestEngineState(t *testing.T) {
 	if resp.EvictionPolicy != "lru" {
 		t.Fatalf("unexpected policy: %s", resp.EvictionPolicy)
 	}
+	if resp.MemoryLimit != 0 || resp.AvailableBytes != 0 {
+		t.Fatalf("no-limit memory should not expose unlimited sentinel: %+v", resp)
+	}
 }
 
 func TestMetricsSummary(t *testing.T) {
